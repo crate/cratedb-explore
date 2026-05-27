@@ -9,13 +9,23 @@ This project accompanies the [CrateDB Explore: IoT Analytics](https://cratedb.co
 
 The load generators in this repository let you drive that same dataset with a configurable mix of geo-proximity, multi-table join, and full-text search queries over the PostgreSQL wire protocol. Each implementation produces identical workloads and reports latency percentiles via [HdrHistogram](https://github.com/HdrHistogram/HdrHistogram).
 
-## Implementations
+## Weather Load Generators
 
 | Language | Directory | Driver |
 | -------- | --------- | ------ |
 | [Java](src_weather/main/java/README.md) | `src_weather/main/java/` | JDBC (`postgresql`) |
 | [Python](src_weather/main/python/README.md) | `src_weather/main/python/` | [psycopg2](https://www.psycopg.org/) |
 | [.NET (C#)](src_weather/main/dotnet/README.md) | `src_weather/main/dotnet/` | [Npgsql](https://www.npgsql.org/) |
+
+## KNN Search CLI
+
+Interactive search tool for CrateDB's `german_regions` table. Supports semantic search via OpenAI embeddings + `KNN_MATCH`, and BM25 fulltext search via `MATCH` — no OpenAI key needed for fulltext mode.
+
+| Language | Directory | Driver |
+| -------- | --------- | ------ |
+| [Java](src_knn_search/main/java/README.md) | `src_knn_search/main/java/` | JDBC (`postgresql`) + [Gson](https://github.com/google/gson) |
+| [Python](src_knn_search/main/python/README.md) | `src_knn_search/main/python/` | [psycopg](https://www.psycopg.org/) + [OpenAI](https://github.com/openai/openai-python) |
+| [.NET (C#)](src_knn_search/main/dotnet/README.md) | `src_knn_search/main/dotnet/` | [Npgsql](https://www.npgsql.org/) |
 
 ## Prerequisites
 
