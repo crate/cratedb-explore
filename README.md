@@ -44,6 +44,16 @@ The `data/` directory contains the reference datasets:
 | [`german_regions.json`](data/german_regions.json) | 16 German states with boundaries, fulltext columns, and embeddings |
 | [`export-demo_climate_data_large_v2.json`](data/export-demo_climate_data_large_v2.json) | Climate measurement readings |
 
+## Grafana Dashboard
+
+The `grafana/` directory contains a pre-built dashboard for visualizing the weather data:
+
+| File | Description |
+| ---- | ----------- |
+| [`german_weather_data.json`](grafana/german_weather_data.json) | Importable Grafana dashboard with geomap, gauge, and time-series panels. Connects to CrateDB via the PostgreSQL datasource plugin. |
+
+To use it, add a PostgreSQL datasource in Grafana pointing at your CrateDB cluster, then import the JSON file via **Dashboards > Import**.
+
 ## Prerequisites
 
 - Network access to your CrateDB cluster on port 5432
