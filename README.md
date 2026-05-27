@@ -27,13 +27,27 @@ Interactive search tool for CrateDB's `german_regions` table. Supports semantic 
 | [Python](src_knn_search/main/python/README.md) | `src_knn_search/main/python/` | [psycopg](https://www.psycopg.org/) + [OpenAI](https://github.com/openai/openai-python) |
 | [.NET (C#)](src_knn_search/main/dotnet/README.md) | `src_knn_search/main/dotnet/` | [Npgsql](https://www.npgsql.org/) |
 
+## Data and Schema
+
+The `sql/` directory contains the DDL and DML needed to set up the demo tables:
+
+| File | Description |
+| ---- | ----------- |
+| [`german_weather_data_ddl.sql`](sql/german_weather_data_ddl.sql) | `CREATE TABLE` statements for `climate_data`, `german_regions`, and `geo_points` |
+| [`german_weather_data_dml.sql`](sql/german_weather_data_dml.sql) | `COPY FROM` and `INSERT` statements to load reference data |
+
+The `data/` directory contains the reference datasets:
+
+| File | Description |
+| ---- | ----------- |
+| [`geo_points.json`](data/geo_points.json) | 726 weather station locations with nearest-town mappings |
+| [`german_regions.json`](data/german_regions.json) | 16 German states with boundaries, fulltext columns, and embeddings |
+| [`export-demo_climate_data_large_v2.json`](data/export-demo_climate_data_large_v2.json) | Climate measurement readings |
+
 ## Prerequisites
 
 - Network access to your CrateDB cluster on port 5432
-- The following tables populated in a `demo` schema:
-  - `climate_data` — with `geo_location`, `measurement_time`, and `data` (object with a `temperature` field)
-  - `german_regions` — with `region_name`, `geo_coords` (polygon), and `economics` (full-text indexed)
-  - `geo_points` — with `geo_location` and `nearest_town`
+- The tables above populated in a `demo` schema (run the DDL then DML scripts)
 
 See each implementation's README for language-specific setup and usage instructions.
 
