@@ -1,4 +1,4 @@
-# QueryCrate — Python
+    # QueryCrate — Python
 
 Python port of the CrateDB climate data load-generator. Connects to a [CrateDB](https://crate.io/) cluster over the PostgreSQL wire protocol using [psycopg2](https://www.psycopg.org/) and runs a configurable mix of queries against German climate and region data.
 
@@ -56,6 +56,8 @@ Python port of the CrateDB climate data load-generator. Connects to a [CrateDB](
 ## Setup
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
