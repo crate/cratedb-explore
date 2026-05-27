@@ -1,0 +1,4 @@
+crate
+crash
+psycopg[binary]
+openai

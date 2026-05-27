@@ -13,9 +13,9 @@ The load generators in this repository let you drive that same dataset with a co
 
 | Language | Directory | Driver |
 | -------- | --------- | ------ |
-| [Java](src/main/java/README.md) | `src/main/java/` | JDBC (`postgresql`) |
-| [Python](src/main/python/README.md) | `src/main/python/` | [psycopg2](https://www.psycopg.org/) |
-| [.NET (C#)](src/main/dotnet/README.md) | `src/main/dotnet/` | [Npgsql](https://www.npgsql.org/) |
+| [Java](src_weather/main/java/README.md) | `src_weather/main/java/` | JDBC (`postgresql`) |
+| [Python](src_weather/main/python/README.md) | `src_weather/main/python/` | [psycopg2](https://www.psycopg.org/) |
+| [.NET (C#)](src_weather/main/dotnet/README.md) | `src_weather/main/dotnet/` | [Npgsql](https://www.npgsql.org/) |
 
 ## Prerequisites
 
