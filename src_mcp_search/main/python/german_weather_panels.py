@@ -85,7 +85,11 @@ _VAR_SPEC: dict[str, tuple[str, type, str]] = {
     "search_categories": (
         "search_categories",
         str,
-        "Column(s) to search, e.g. 'region_name'",
+        "A single fulltext-indexed column on demo.german_regions to "
+        "MATCH against. Valid values: 'region_name', 'economics', "
+        "'transportation', 'introduced_species'. Pass exactly one "
+        "column name — comma-separated lists produce a SQL syntax "
+        "error, and 'tourism' is not fulltext-indexed.",
     ),
     "latitude": ("latitude", float, "Latitude of the location"),
     "longitude": ("longitude", float, "Longitude of the location"),
