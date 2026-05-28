@@ -46,7 +46,9 @@ The `data/` directory contains the reference datasets:
 
 ## MCP Search (Claude + CrateDB)
 
-A Python CLI that lets [Claude](https://www.anthropic.com/claude) answer questions about the weather dataset by calling MCP tools. Each panel in the Grafana dashboard is registered as an in-process MCP tool alongside the official `cratedb-mcp` server, so Claude can run the dashboard's own SQL or fall back to arbitrary queries.
+<img src="doc/mcp_server.png" alt="MCP search CLI in action" width="100%">
+
+A Python or Java CLI that lets [Claude](https://www.anthropic.com/claude) answer questions about the weather dataset by calling MCP tools. Each panel in the Grafana dashboard is registered as an in-process MCP tool alongside the official `cratedb-mcp` server, so Claude can run the dashboard's own SQL or fall back to arbitrary queries.
 
 | Language | Directory | Driver |
 | -------- | --------- | ------ |

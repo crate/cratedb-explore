@@ -1,5 +1,7 @@
         # german_weather — ask Claude questions about a CrateDB weather cluster
 
+<img src="../../../doc/mcp_server.png" alt="MCP search CLI in action" width="100%">
+
 A small Python program that hands Claude two ways to query a CrateDB
 cluster holding German weather data:
 

@@ -1,5 +1,7 @@
 # GermanWeather (Java) — ask Claude questions about a CrateDB weather cluster
 
+<img src="../../../doc/mcp_server.png" alt="MCP search CLI in action" width="100%">
+
 Java port of [`src_mcp_search/main/python/`](../python/README.md). Same
 canned questions, same Grafana-panel-as-tool mechanism, same SQL — built
 directly on the official [Anthropic Java
