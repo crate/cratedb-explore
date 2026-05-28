@@ -522,7 +522,7 @@
           }
         }
       ],
-      "title": "Temperture",
+      "title": "Temperature",
       "type": "gauge"
     },
     {
