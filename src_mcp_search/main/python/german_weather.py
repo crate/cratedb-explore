@@ -342,7 +342,7 @@ async def run(cratedb_url: str, prompt: str) -> None:
         #   2. inspect columns on the candidate table
         #   3. run the actual query
         #   4. summarize
-        max_turns=15,
+        max_turns=30,
         # System prompt — invisible to the API's `tools` discovery
         # mechanism (that's a separate field) but used to steer
         # behaviour. Each rule below was added in response to a
