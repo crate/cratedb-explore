@@ -254,7 +254,13 @@ public final class GermanWeather {
                                     .build()));
                 } else if (use.isPresent()) {
                     ToolUseBlock u = use.get();
-                    String inputJson = u._input().toString();
+                    String inputJson;
+                    try {
+                        inputJson = new com.fasterxml.jackson.databind.ObjectMapper()
+                                .writeValueAsString(u._input());
+                    } catch (Exception ex) {
+                        inputJson = u._input().toString();
+                    }
                     if (inputJson.length() > 200) {
                         inputJson = inputJson.substring(0, 200) + "…";
                     }
@@ -285,7 +291,7 @@ public final class GermanWeather {
                 if (handler == null) {
                     resultText = "Unknown tool: " + u.name();
                 } else {
-                    Map<String, Object> args = parseInput(u._input().toString());
+                    Map<String, Object> args = extractInput(u);
                     resultText = handler.handler.apply(args);
                 }
                 resultBlocks.add(ContentBlockParam.ofToolResult(
@@ -300,12 +306,43 @@ public final class GermanWeather {
         System.out.println("\n=== max_turns reached, stopping ===");
     }
 
+    /**
+     * Read the tool input as a plain {@code Map<String, Object>}.
+     *
+     * <p>{@code ToolUseBlock._input()} returns a {@link JsonValue} that
+     * wraps the parsed JSON. Calling {@code .toString()} on it produces
+     * a Map-style {@code {k=v}} repr, NOT JSON, so we can't simply
+     * stringify-then-Gson-parse. Instead we walk the JsonValue tree
+     * and convert each node.
+     */
+    private static Map<String, Object> extractInput(ToolUseBlock use) {
+        Object converted = convertJsonValue(use._input());
+        if (converted instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = (Map<String, Object>) converted;
+            return map;
+        }
+        return Map.of();
+    }
+
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> parseInput(String inputJson) {
-        if (inputJson == null || inputJson.isBlank() || "null".equals(inputJson)) {
+    private static Object convertJsonValue(JsonValue value) {
+        // JsonValue exposes typed accessors; the cleanest cross-version
+        // path is to serialize to a JSON string via Jackson (which the
+        // SDK already uses internally) and parse with Gson into plain
+        // Java types. Going through the SDK's serializer guarantees we
+        // get real JSON, not the Map-toString format.
+        String json;
+        try {
+            json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(value);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize tool input: " + e.getMessage(), e);
+        }
+        if (json == null || json.isBlank() || "null".equals(json)) {
             return Map.of();
         }
-        return (Map<String, Object>) GSON.fromJson(inputJson, Map.class);
+        Object parsed = GSON.fromJson(json, Object.class);
+        return parsed != null ? parsed : Map.of();
     }
 
     // -------------------------- menu --------------------------
