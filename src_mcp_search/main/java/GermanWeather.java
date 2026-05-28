@@ -125,6 +125,19 @@ public final class GermanWeather {
 
     private static final String SYSTEM_PROMPT =
             "You are a data analyst with access to a CrateDB cluster via tools. "
+                    + "CRITICAL RULE — GERMANY GEOGRAPHIC FILTER. For ANY question "
+                    + "asking 'where is the coldest / warmest / highest / lowest / "
+                    + "rainiest / driest / most extreme X place in Germany' (or any "
+                    + "ranking of locations), you MUST restrict candidate points via "
+                    + "WITHIN(c.geo_location, r.geo_coords) by joining "
+                    + "demo.climate_data c to demo.german_regions r. Do NOT use "
+                    + "demo.geo_points or DISTANCE() alone to decide whether a "
+                    + "location counts as 'in Germany' — geo_points contains "
+                    + "near-border foreign towns (Tannheim in Tyrol, for example), "
+                    + "so without the polygon filter your answer will be wrong. "
+                    + "Concretely: a grid cell at lat 47.5, lon 10.5 fails the "
+                    + "WITHIN filter — Tannheim is not in Germany; lat 47.5, "
+                    + "lon 10.25 (Ofterschwang, Bayern) is correct. "
                     + "When answering questions, first discover the relevant schema (tables "
                     + "and columns), then write SQL queries to answer the question. If the "
                     + "data does not contain what's needed to answer, say so explicitly "
@@ -148,15 +161,7 @@ public final class GermanWeather {
                     + "economics, transportation and introduced species. "
                     + "All demo tables live in the 'demo' schema. The HTTP transport "
                     + "already sends Default-Schema: demo so unqualified table names "
-                    + "resolve there. "
-                    + "For any 'coldest / warmest / highest / lowest / extreme place "
-                    + "in Germany' question, always restrict candidate points to those "
-                    + "that fall inside a German federal-state polygon by joining "
-                    + "demo.climate_data to demo.german_regions with "
-                    + "WITHIN(c.geo_location, r.geo_coords). Without that filter, "
-                    + "border grid cells in Austria/Switzerland/Poland/etc. can win "
-                    + "the ranking — e.g. lat 47.5, lon 10.5 resolves to Tannheim "
-                    + "in Tyrol, not Germany.";
+                    + "resolve there.";
 
     private GermanWeather() {}
 
