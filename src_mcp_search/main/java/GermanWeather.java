@@ -148,7 +148,15 @@ public final class GermanWeather {
                     + "economics, transportation and introduced species. "
                     + "All demo tables live in the 'demo' schema. The HTTP transport "
                     + "already sends Default-Schema: demo so unqualified table names "
-                    + "resolve there.";
+                    + "resolve there. "
+                    + "For any 'coldest / warmest / highest / lowest / extreme place "
+                    + "in Germany' question, always restrict candidate points to those "
+                    + "that fall inside a German federal-state polygon by joining "
+                    + "demo.climate_data to demo.german_regions with "
+                    + "WITHIN(c.geo_location, r.geo_coords). Without that filter, "
+                    + "border grid cells in Austria/Switzerland/Poland/etc. can win "
+                    + "the ranking — e.g. lat 47.5, lon 10.5 resolves to Tannheim "
+                    + "in Tyrol, not Germany.";
 
     private GermanWeather() {}
 
