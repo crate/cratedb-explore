@@ -376,7 +376,11 @@ async def run(cratedb_url: str, prompt: str) -> None:
             "terms. Only after you've actually checked may you say the data "
             "doesn't contain what's needed. "
             "Note that the german_regions table has information on tourism, "
-            "economics, transportation and introduced species."
+            "economics, transportation and introduced species. "
+            "All demo tables live in the 'demo' schema. As your very first "
+            "SQL call, run `SET search_path TO demo;` via "
+            "`mcp__cratedb__query_sql` so subsequent queries can use "
+            "unqualified table names where possible."
         ),
     )
 

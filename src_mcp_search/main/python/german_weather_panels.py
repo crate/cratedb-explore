@@ -210,7 +210,18 @@ def _run_sql(cratedb_url: str, sql: str) -> dict[str, Any]:
         netloc += f":{parsed.port}"
     endpoint = f"{parsed.scheme}://{netloc}/_sql"
     auth = (parsed.username, parsed.password or "") if parsed.username else None
-    r = httpx.post(endpoint, json={"stmt": sql}, auth=auth, timeout=60)
+    # CrateDB's HTTP _sql endpoint is stateless, so a `SET search_path
+    # TO demo` issued via SQL would not carry over to the next call.
+    # The persistent equivalent is the `Default-Schema` request header
+    # — once it's set, unqualified table names resolve under that
+    # schema for this one request.
+    r = httpx.post(
+        endpoint,
+        json={"stmt": sql},
+        auth=auth,
+        headers={"Default-Schema": "demo"},
+        timeout=60,
+    )
     r.raise_for_status()
     return r.json()
 
