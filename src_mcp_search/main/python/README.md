@@ -51,17 +51,20 @@ variable. CLI flags win.
 
 | Flag | Env var | Required? | Default |
 |---|---|---|---|
-| `--cratedb-url` | `CRATEDB_CLUSTER_URL` | one of url / host | — |
+| `--cratedb-url` | `CRATEDB_CLUSTER_URL` | one of url / host (must embed user:password) | — |
 | `--cratedb-host` | `CRATEDB_HOST` | one of url / host | — |
 | `--cratedb-port` | `CRATEDB_PORT` | no | `4200` |
-| `--cratedb-user` | `CRATEDB_USER` | no | — |
-| `--cratedb-password` | `CRATEDB_PASSWORD` | no | — |
+| `--cratedb-user` | `CRATEDB_USER` | yes (when using --cratedb-host) | — |
+| `--cratedb-password` | `CRATEDB_PASSWORD` | yes (when using --cratedb-host) | — |
 | `--cratedb-scheme` | `CRATEDB_SCHEME` | no | `http` |
 | `--anthropic-api-key` | `ANTHROPIC_API_KEY` | yes | — |
 
-If anything required is missing the program prints every missing
-item at once and exits with code 1. Bare-password-without-user is
-also rejected up front.
+Credentials are mandatory: anonymous CrateDB access would 401 on
+every tool call, so the script refuses to start without a user and
+password. If you supply `--cratedb-url` it must embed `user:password@`;
+otherwise pass `--cratedb-user` and `--cratedb-password` alongside
+`--cratedb-host`. If anything required is missing the program prints
+every missing item at once and exits with code 1.
 
 ---
 

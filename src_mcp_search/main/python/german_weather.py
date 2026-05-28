@@ -55,7 +55,7 @@ Run:
 import argparse
 import asyncio
 import os
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 # The agent SDK is the high-level orchestrator. `query(...)` runs the
 # entire agent loop and yields messages as they arrive. The Block /
@@ -115,9 +115,27 @@ def resolve_cratedb_url(args: argparse.Namespace) -> tuple[str | None, list[str]
     """
     missing: list[str] = []
 
-    # Easy path: a full URL was given.
+    # Easy path: a full URL was given. Still verify that it embeds
+    # credentials — an unauthenticated URL would silently 401 every
+    # request later. Treating this as a config error gives a clear
+    # message at startup instead of a cryptic tool failure mid-run.
     url = args.cratedb_url or os.environ.get("CRATEDB_CLUSTER_URL")
     if url:
+        parsed = urlparse(url)
+        if not parsed.username:
+            missing.append(
+                "CrateDB URL must include a username, e.g. "
+                "http://user:password@host:4200/ "
+                "(--cratedb-url or CRATEDB_CLUSTER_URL)"
+            )
+        if not parsed.password:
+            missing.append(
+                "CrateDB URL must include a password, e.g. "
+                "http://user:password@host:4200/ "
+                "(--cratedb-url or CRATEDB_CLUSTER_URL)"
+            )
+        if missing:
+            return None, missing
         return url, missing
 
     # Otherwise we need at least a host.
@@ -131,21 +149,20 @@ def resolve_cratedb_url(args: argparse.Namespace) -> tuple[str | None, list[str]
     user = args.cratedb_user or os.environ.get("CRATEDB_USER")
     password = args.cratedb_password or os.environ.get("CRATEDB_PASSWORD")
 
-    # A bare password with no user is almost always a misconfiguration
-    # — flag it loudly instead of producing a URL like ":pw@host".
-    if password and not user:
-        missing.append("CrateDB user (--cratedb-user or CRATEDB_USER) is required when a password is set")
+    # Both user and password are required. Anonymous CrateDB access
+    # would 401 immediately on every tool call; better to fail loudly
+    # here than to debug 401s further downstream.
+    if not user:
+        missing.append("CrateDB user (--cratedb-user or CRATEDB_USER) is required")
+    if not password:
+        missing.append("CrateDB password (--cratedb-password or CRATEDB_PASSWORD) is required")
+    if missing:
         return None, missing
 
     # Assemble the userinfo segment, URL-encoding to keep the URL
     # well-formed. quote(..., safe="") escapes everything that isn't
     # a plain unreserved character.
-    auth = ""
-    if user:
-        auth = quote(user, safe="")
-        if password is not None:
-            auth += ":" + quote(password, safe="")
-        auth += "@"
+    auth = quote(user, safe="") + ":" + quote(password, safe="") + "@"
 
     return f"{scheme}://{auth}{host}:{port}/", missing
 
