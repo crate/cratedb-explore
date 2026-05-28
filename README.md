@@ -44,6 +44,14 @@ The `data/` directory contains the reference datasets:
 | [`german_regions.json`](data/german_regions.json) | 16 German states with boundaries, fulltext columns, and embeddings |
 | [`export-demo_climate_data_large_v2.json`](data/export-demo_climate_data_large_v2.json) | Climate measurement readings |
 
+## MCP Search (Claude + CrateDB)
+
+A Python CLI that lets [Claude](https://www.anthropic.com/claude) answer questions about the weather dataset by calling MCP tools. Each panel in the Grafana dashboard is registered as an in-process MCP tool alongside the official `cratedb-mcp` server, so Claude can run the dashboard's own SQL or fall back to arbitrary queries.
+
+| Language | Directory | Driver |
+| -------- | --------- | ------ |
+| [Python](src_mcp_search/main/python/README.md) | `src_mcp_search/main/python/` | [claude-agent-sdk](https://github.com/anthropics/claude-agent-sdk-python) + [cratedb-mcp](https://github.com/crate/cratedb-mcp) |
+
 ## Grafana Dashboard
 
 The `grafana/` directory contains a pre-built dashboard for visualizing the weather data:
