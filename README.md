@@ -50,6 +50,7 @@ A Python CLI that lets [Claude](https://www.anthropic.com/claude) answer questio
 
 | Language | Directory | Driver |
 | -------- | --------- | ------ |
+| [Java](src_mcp_search/main/java/README.md) | `src_mcp_search/main/java/` | [Anthropic Java SDK](https://github.com/anthropics/anthropic-sdk-java) + HTTP `_sql` |
 | [Python](src_mcp_search/main/python/README.md) | `src_mcp_search/main/python/` | [claude-agent-sdk](https://github.com/anthropics/claude-agent-sdk-python) + [cratedb-mcp](https://github.com/crate/cratedb-mcp) |
 
 ## Grafana Dashboard
