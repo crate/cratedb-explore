@@ -17,6 +17,14 @@ The load generators in this repository let you drive that same dataset with a co
 | [Python](src_weather/main/python/README.md) | `src_weather/main/python/` | [psycopg2](https://www.psycopg.org/) |
 | [.NET (C#)](src_weather/main/dotnet/README.md) | `src_weather/main/dotnet/` | [Npgsql](https://www.npgsql.org/) |
 
+### Latency charts
+
+After each run, every implementation writes a `latency_histogram.png` to its working directory — a percentile-distribution plot (50%, 90%, 99%, 99.9%, 99.99%) with one line per query type, rendered with the platform's native plotting library. The shape is the same in all three (REGION climbs into a tail plateau, WKT/FTS stay low); only the styling differs.
+
+| Java &mdash; [JFreeChart](https://www.jfree.org/jfreechart/) | Python &mdash; [matplotlib](https://matplotlib.org/) | .NET &mdash; [ScottPlot](https://scottplot.net/) |
+| --- | --- | --- |
+| [<img src="doc/latency_histogram_java.png" alt="Java latency chart">](src_weather/main/java/README.md#latency-chart) | [<img src="doc/latency_histogram_python.png" alt="Python latency chart">](src_weather/main/python/README.md#latency-chart) | [<img src="doc/latency_histogram_dotnet.png" alt=".NET latency chart">](src_weather/main/dotnet/README.md#latency-chart) |
+
 ## KNN Search CLI
 
 Interactive search tool for CrateDB's `german_regions` table. Supports semantic search via OpenAI embeddings + `KNN_MATCH`, and BM25 fulltext search via `MATCH` — no OpenAI key needed for fulltext mode.
