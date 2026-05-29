@@ -95,7 +95,10 @@ Behavioural detail behind the three TYPE codes — what each call samples, which
 - Picks a random federal-state name from the `german_regions` table.
 - Issues a three-way join across `climate_data`, `german_regions`, `geo_points`, filtered to the most recent `measurement_time` via a correlated subquery, returning every sensor inside the region's polygon with its nearest-town label and a Kelvin → Celsius conversion.
 - Exercises `WITHIN(point, polygon)` containment, the correlated subquery, and an inner join on `geo_location`. Returns dozens of rows per call (one per sensor in the region).
-- Almost always the slowest query type — the REGION line sits at the top of the chart.
+- Almost always the slowest query type — the REGION line sits at the top of the chart. Three things stack up:
+  1. **Polygon containment is expensive.** `WITHIN(point, polygon)` tests every candidate `geo_point` against the region's boundary — roughly O(polygon vertices) per candidate, versus the WKT query's single point-to-point distance check.
+  2. **Cluster-wide aggregation per call.** The correlated `(SELECT max(d2.measurement_time) FROM climate_data d2)` subquery has to look at the whole climate-data table to find the latest epoch, every time the query runs.
+  3. **Bigger result set.** Returns dozens of rows (one per sensor in the region), versus WKT's one min/max row and FTS's three — more bytes ship back per call and more deserialization on the client.
 - Requires the `region_names` pool.
 
 #### `FTS` — full-text relevance ranking
