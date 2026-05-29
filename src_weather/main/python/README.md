@@ -114,7 +114,26 @@ FTS 'cars' -> region=Thüringen score=0.9552864
 WKT: count=100 avg=6.0ms p50=6ms p99=8ms p99.9=8ms max=9ms
 REGION: count=50 avg=120.0ms p50=110ms p99=190ms p99.9=190ms max=200ms
 FTS: count=30 avg=7.0ms p50=7ms p99=9ms p99.9=9ms max=10ms
+Wrote chart: /path/to/latency_histogram.png
 ```
+
+## Latency chart
+
+After the textual summary the program writes `latency_histogram.png` in
+the working directory — a percentile-distribution plot rendered with
+[matplotlib](https://matplotlib.org/) (Agg backend, so no display is
+required), one line per query type.
+
+<img src="../../../doc/latency_histogram_python.png" alt="Latency percentile distribution (matplotlib)" width="100%">
+
+The X axis is `1/(1-p/100)` with `set_xscale('log')`, and the ticks are
+relabeled with a `FixedLocator` + `FixedFormatter` pair so they read as
+`50%`, `90%`, `99%`, `99.9%`, `99.99%` instead of the raw `2`, `10`,
+`100`, …. Log-spacing means the long tail (p99 → p99.99) gets visible
+separation instead of being crushed against the right edge. Y is
+round-trip latency in milliseconds. In the chart above the REGION line
+climbs from ~112ms at p50 to a ~271ms plateau by p99, while WKT and FTS
+hug the floor at single-digit milliseconds.
 
 ## Notes on the SQL
 

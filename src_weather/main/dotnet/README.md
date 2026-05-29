@@ -112,7 +112,25 @@ FTS 'cars' -> region=Thüringen score=0.9552864
 WKT: count=100 avg=5.5ms p50=5ms p99=7ms p99.9=7ms max=8ms
 REGION: count=50 avg=103.0ms p50=110ms p99=165ms p99.9=165ms max=170ms
 FTS: count=30 avg=6.0ms p50=6ms p99=7ms p99.9=7ms max=8ms
+Wrote chart: /path/to/latency_histogram.png
 ```
+
+## Latency chart
+
+After the textual summary the program writes `latency_histogram.png` in
+the working directory — a percentile-distribution plot rendered with
+[ScottPlot](https://scottplot.net/), one line per query type.
+
+<img src="../../../doc/latency_histogram_dotnet.png" alt="Latency percentile distribution (ScottPlot)" width="100%">
+
+ScottPlot 5.x has no built-in log-axis transform, so the X values are
+log10-transformed before plotting and the ticks are placed manually via
+a `NumericManual` generator with labels `50%`, `90%`, `99%`, `99.9%`,
+`99.99%`. Log-spacing means the long tail (p99 → p99.99) gets visible
+separation instead of being crushed against the right edge. Y is
+round-trip latency in milliseconds. In the chart above the REGION line
+climbs from ~155ms at p50 to a ~280ms plateau by p99, while WKT and FTS
+hug the floor at single-digit milliseconds.
 
 ## Notes on the SQL
 

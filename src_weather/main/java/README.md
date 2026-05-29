@@ -121,7 +121,24 @@ FTS 'cars' -> region=Baden-Wurttemberg score=4.23
 WKT: count=100 avg=12.3ms p50=11ms p99=34ms p99.9=34ms max=45ms
 REGION: count=50 avg=85.2ms p50=78ms p99=190ms p99.9=190ms max=210ms
 FTS: count=30 avg=5.1ms p50=4ms p99=15ms p99.9=15ms max=18ms
+Wrote chart: /path/to/latency_histogram.png
 ```
+
+## Latency chart
+
+After the textual summary the program writes `latency_histogram.png` in
+the working directory — a percentile-distribution plot rendered with
+[JFreeChart](https://www.jfree.org/jfreechart/), one line per query
+type.
+
+<img src="../../../doc/latency_histogram_java.png" alt="Latency percentile distribution (JFreeChart)" width="100%">
+
+The X axis is `log10(1/(1-p/100))`, relabeled directly as `50%`, `90%`,
+`99%`, `99.9%`, `99.99%`. Log-spacing means the long tail
+(p99 → p99.99) gets visible separation instead of being crushed against
+the right edge. Y is round-trip latency in milliseconds. In the chart
+above the REGION line climbs from ~150ms at p50 to a ~245ms plateau by
+p99, while WKT and FTS hug the floor at single-digit milliseconds.
 
 ## Notes on the SQL
 
