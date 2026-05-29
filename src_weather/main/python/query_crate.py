@@ -246,9 +246,12 @@ def render_chart(histograms: dict[str, HdrHistogram]):
     fig, ax = plt.subplots(figsize=(10, 6))
     for name, h in histograms.items():
         xs = [1.0 / (1.0 - p / 100.0) for p in CHART_PERCENTILES]
-        ys = [h.get_value_at_percentile(p) for p in CHART_PERCENTILES]
+        # Clamp to 1ms — HdrHistogram returns integer ms, so a 0 here is
+        # really "sub-millisecond" and would break the log Y axis.
+        ys = [max(h.get_value_at_percentile(p), 1) for p in CHART_PERCENTILES]
         ax.plot(xs, ys, marker="o", label=name)
     ax.set_xscale("log")
+    ax.set_yscale("log")
 
     # Relabel the log-spaced X axis with human percentile names so the
     # tail (p99 → p99.99) reads as percentages, not as 100 → 10000.

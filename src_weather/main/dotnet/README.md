@@ -123,14 +123,19 @@ the working directory — a percentile-distribution plot rendered with
 
 <img src="../../../doc/latency_histogram_dotnet.png" alt="Latency percentile distribution (ScottPlot)" width="100%">
 
-ScottPlot 5.x has no built-in log-axis transform, so the X values are
-log10-transformed before plotting and the ticks are placed manually via
-a `NumericManual` generator with labels `50%`, `90%`, `99%`, `99.9%`,
-`99.99%`. Log-spacing means the long tail (p99 → p99.99) gets visible
-separation instead of being crushed against the right edge. Y is
-round-trip latency in milliseconds. In the chart above the REGION line
-climbs from ~155ms at p50 to a ~280ms plateau by p99, while WKT and FTS
-hug the floor at single-digit milliseconds.
+ScottPlot 5.x has no built-in log-axis transform, so both axes are
+log10-transformed before plotting and the ticks are placed manually.
+For X, a `NumericManual` generator labels positions as `50%`, `90%`,
+`99%`, `99.9%`, `99.99%`. For Y, a `NumericAutomatic` generator with
+`LogMinorTickGenerator` + `IntegerTicksOnly` plus a
+`LabelFormatter = y => $"{Math.Pow(10, y):N0}"` places major ticks at
+log10 integers and re-labels them in original milliseconds. Log Y means
+a fast query at ~10ms and a slow one at ~1000ms both have visible
+vertical space (a linear Y would crush the fast queries into the
+floor). Values are clamped to a 1ms minimum so the log doesn't blow up
+on sub-millisecond samples. In the chart above the REGION line climbs
+from ~187ms at p50 to ~331ms by p99, while WKT and FTS sit lower at
+~25–34ms.
 
 ## Notes on the SQL
 

@@ -136,9 +136,13 @@ type.
 The X axis is `log10(1/(1-p/100))`, relabeled directly as `50%`, `90%`,
 `99%`, `99.9%`, `99.99%`. Log-spacing means the long tail
 (p99 → p99.99) gets visible separation instead of being crushed against
-the right edge. Y is round-trip latency in milliseconds. In the chart
-above the REGION line climbs from ~150ms at p50 to a ~245ms plateau by
-p99, while WKT and FTS hug the floor at single-digit milliseconds.
+the right edge. Y is round-trip latency in milliseconds, also on a
+`LogarithmicAxis` so a fast query at ~10ms and a slow one at ~1000ms
+both have visible vertical space (a linear Y would crush the fast
+queries into the floor). Values are clamped to a 1ms minimum so the log
+axis doesn't blow up on sub-millisecond samples. In the chart above the
+REGION line climbs from ~260ms at p50 to ~850ms by p99, while WKT and
+FTS sit lower at ~30–125ms.
 
 ## Notes on the SQL
 

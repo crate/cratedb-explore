@@ -381,10 +381,12 @@ void RenderChart(Dictionary<string, LongHistogram> histograms)
     var plot = new ScottPlot.Plot();
     foreach (var (name, h) in histograms)
     {
-        // ScottPlot 5.x has no built-in log-axis transform, so log10 the X
-        // values ourselves and re-label the ticks in the original space.
+        // ScottPlot 5.x has no built-in log-axis transform, so log10 both
+        // axes ourselves and re-label the ticks in their original space.
+        // Clamp Y to 1ms — HdrHistogram returns integer ms, so a 0 here is
+        // really "sub-millisecond" and would break the log Y axis.
         var xs = chartPercentiles.Select(p => Math.Log10(1.0 / (1.0 - p / 100.0))).ToArray();
-        var ys = chartPercentiles.Select(p => (double)h.GetValueAtPercentile(p)).ToArray();
+        var ys = chartPercentiles.Select(p => Math.Log10(Math.Max(h.GetValueAtPercentile(p), 1))).ToArray();
         var scatter = plot.Add.Scatter(xs, ys);
         scatter.LegendText = name;
     }
@@ -395,6 +397,14 @@ void RenderChart(Dictionary<string, LongHistogram> histograms)
     var tickPositions = tickPcts.Select(p => Math.Log10(1.0 / (1.0 - p / 100.0))).ToArray();
     var tickLabels = tickPcts.Select(p => $"{p}%").ToArray();
     plot.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericManual(tickPositions, tickLabels);
+
+    // Relabel the Y axis from log10 values back to milliseconds (1, 10, 100, …).
+    plot.Axes.Left.TickGenerator = new ScottPlot.TickGenerators.NumericAutomatic
+    {
+        MinorTickGenerator = new ScottPlot.TickGenerators.LogMinorTickGenerator(),
+        IntegerTicksOnly = true,
+        LabelFormatter = y => $"{Math.Pow(10, y):N0}",
+    };
 
     plot.Title("Latency percentile distribution");
     plot.XLabel("Percentile");

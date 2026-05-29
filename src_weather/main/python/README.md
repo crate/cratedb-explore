@@ -131,9 +131,12 @@ relabeled with a `FixedLocator` + `FixedFormatter` pair so they read as
 `50%`, `90%`, `99%`, `99.9%`, `99.99%` instead of the raw `2`, `10`,
 `100`, …. Log-spacing means the long tail (p99 → p99.99) gets visible
 separation instead of being crushed against the right edge. Y is
-round-trip latency in milliseconds. In the chart above the REGION line
-climbs from ~112ms at p50 to a ~271ms plateau by p99, while WKT and FTS
-hug the floor at single-digit milliseconds.
+round-trip latency in milliseconds with `set_yscale('log')`, so a fast
+query at ~10ms and a slow one at ~1000ms both have visible vertical
+space (a linear Y would crush the fast queries into the floor). Values
+are clamped to a 1ms minimum so the log axis doesn't warn on
+sub-millisecond samples. In the chart above the REGION line climbs from
+~240ms at p50 to ~428ms by p99, while WKT and FTS sit lower at ~30–45ms.
 
 ## Notes on the SQL
 

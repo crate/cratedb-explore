@@ -18,6 +18,7 @@ import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartUtils;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.AxisState;
+import org.jfree.chart.axis.LogarithmicAxis;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.axis.NumberTick;
 import org.jfree.chart.axis.TickType;
@@ -463,7 +464,10 @@ public class QueryCrate {
             XYSeries series = new XYSeries(entry.getKey());
             for (double p : CHART_PERCENTILES) {
                 double x = Math.log10(1.0 / (1.0 - p / 100.0));
-                series.add(x, entry.getValue().getValueAtPercentile(p));
+                // Clamp to 1ms — HdrHistogram returns integer ms, so a 0 here is
+                // really "sub-millisecond" and would break the log Y axis.
+                double y = Math.max(entry.getValue().getValueAtPercentile(p), 1);
+                series.add(x, y);
             }
             dataset.addSeries(series);
         }
@@ -495,6 +499,10 @@ public class QueryCrate {
         };
         xAxis.setAutoRangeIncludesZero(false);
         plot.setDomainAxis(xAxis);
+
+        LogarithmicAxis yAxis = new LogarithmicAxis("Latency (ms)");
+        yAxis.setAllowNegativesFlag(false);
+        plot.setRangeAxis(yAxis);
 
         File out = new File("latency_histogram.png");
         try {
