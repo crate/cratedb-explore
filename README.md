@@ -17,6 +17,16 @@ The load generators in this repository let you drive that same dataset with a co
 | [Python](src_weather/main/python/README.md) | `src_weather/main/python/` | [psycopg2](https://www.psycopg.org/) |
 | [.NET (C#)](src_weather/main/dotnet/README.md) | `src_weather/main/dotnet/` | [Npgsql](https://www.npgsql.org/) |
 
+### Query types
+
+All three implementations expose the same three query types, mixed via `TYPE:COUNT` arguments at the command line. Each stresses a different side of CrateDB:
+
+- **`WKT`** — geo-proximity scan. Picks a random `geo_point` + `timestamp` from a pre-loaded pool and asks for the min/max temperature within 1° of that point at that moment. Exercises spatial filtering on `geo_point`. One row out per call. Cheapest of the three; sits at the bottom of the latency chart.
+- **`REGION`** — three-table join. Picks a random federal-state name and returns every sensor inside that polygon at the most recent measurement epoch, with its nearest-town label. Exercises `WITHIN(point, polygon)` containment, a correlated `max(measurement_time)` subquery, and a join on `geo_location`. Almost always the slowest — polygon containment is O(vertices) per candidate point, the subquery scans all of `climate_data`, and the result set is dozens of rows.
+- **`FTS`** — full-text relevance ranking. Picks a random term (`cars`, `trains`, `factories`, `energy`) and runs `MATCH(economics, ?)` against `german_regions`, returning the top 3 by `_score`. Exercises the Lucene-backed full-text index. Three rows out. Fast in steady state, occasional tail spikes on cold matches.
+
+See each implementation's `Query types` section ([Java](src_weather/main/java/README.md#query-types) / [Python](src_weather/main/python/README.md#query-types) / [.NET](src_weather/main/dotnet/README.md#query-types)) for the SQL and language-specific notes.
+
 ### Latency charts
 
 After each run, every implementation writes a `latency_histogram.png` to its working directory — a percentile-distribution plot (50%, 90%, 99%, 99.9%, 99.99%) with one line per query type, rendered with the platform's native plotting library. The shape is the same in all three (REGION climbs into a tail plateau, WKT/FTS stay low); only the styling differs.
@@ -62,6 +72,7 @@ A Python or Java CLI that lets [Claude](https://www.anthropic.com/claude) answer
 | -------- | --------- | ------ |
 | [Java](src_mcp_search/main/java/README.md) | `src_mcp_search/main/java/` | [Anthropic Java SDK](https://github.com/anthropics/anthropic-sdk-java) + HTTP `_sql` |
 | [Python](src_mcp_search/main/python/README.md) | `src_mcp_search/main/python/` | [claude-agent-sdk](https://github.com/anthropics/claude-agent-sdk-python) + [cratedb-mcp](https://github.com/crate/cratedb-mcp) |
+| [.NET (C#)](src_mcp_search/main/dotnet/README.md) | `src_mcp_search/main/dotnet/` | `HttpClient` + `System.Text.Json` + HTTP `_sql` |
 
 ## Grafana Dashboard
 
