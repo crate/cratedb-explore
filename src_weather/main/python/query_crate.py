@@ -111,6 +111,10 @@ VALID_QUERY_TYPES = {"WKT", "REGION", "FTS"}
 # (p99 → p99.99) visible separation under a log-scaled X axis.
 CHART_PERCENTILES = [50, 75, 90, 95, 99, 99.9, 99.99]
 
+# Y-axis tick positions in milliseconds. 1/2/5 family across 1–10000ms;
+# sparse enough to read, dense enough to locate a value within ~20% by eye.
+CHART_LATENCY_TICKS_MS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+
 # Populated once at startup from the database and then sampled randomly during the workload.
 geo_points: list[tuple[float, float]] = []
 timestamps: list = []
@@ -259,6 +263,13 @@ def render_chart(histograms: dict[str, HdrHistogram]):
     ax.xaxis.set_major_locator(FixedLocator([1.0 / (1.0 - p / 100.0) for p in tick_pcts]))
     ax.xaxis.set_major_formatter(FixedFormatter([f"{p}%" for p in tick_pcts]))
     ax.xaxis.set_minor_locator(NullLocator())
+
+    # matplotlib's default LogLocator only labels decade boundaries (10, 100,
+    # 1000). Place an explicit 1/2/5-family tick set so the Y axis reads
+    # smoothly across the range.
+    ax.yaxis.set_major_locator(FixedLocator(CHART_LATENCY_TICKS_MS))
+    ax.yaxis.set_major_formatter(FixedFormatter([str(v) for v in CHART_LATENCY_TICKS_MS]))
+    ax.yaxis.set_minor_locator(NullLocator())
 
     ax.set_xlabel("Percentile")
     ax.set_ylabel("Latency (ms)")

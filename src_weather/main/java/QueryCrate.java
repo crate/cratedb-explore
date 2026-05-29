@@ -18,7 +18,6 @@ import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartUtils;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.AxisState;
-import org.jfree.chart.axis.LogarithmicAxis;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.axis.NumberTick;
 import org.jfree.chart.axis.TickType;
@@ -450,6 +449,11 @@ public class QueryCrate {
     // not in this list is plotted but not labeled.
     private static final double[] CHART_LABELED_PERCENTILES = {50, 90, 99, 99.9, 99.99};
 
+    // Y-axis tick positions in milliseconds. 1/2/5 family across 1–10000ms;
+    // sparse enough to read, dense enough that you can locate a value within
+    // ~20% by eye on a typical run.
+    private static final double[] CHART_LATENCY_TICKS_MS = {1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000};
+
     // Writes a percentile-distribution PNG (one line per query type) to
     // latency_histogram.png in the working directory. X values are
     // log10(1/(1-p/100)) on a linear NumberAxis — this gives the tail
@@ -466,7 +470,7 @@ public class QueryCrate {
                 double x = Math.log10(1.0 / (1.0 - p / 100.0));
                 // Clamp to 1ms — HdrHistogram returns integer ms, so a 0 here is
                 // really "sub-millisecond" and would break the log Y axis.
-                double y = Math.max(entry.getValue().getValueAtPercentile(p), 1);
+                double y = Math.log10(Math.max(entry.getValue().getValueAtPercentile(p), 1));
                 series.add(x, y);
             }
             dataset.addSeries(series);
@@ -500,8 +504,22 @@ public class QueryCrate {
         xAxis.setAutoRangeIncludesZero(false);
         plot.setDomainAxis(xAxis);
 
-        LogarithmicAxis yAxis = new LogarithmicAxis("Latency (ms)");
-        yAxis.setAllowNegativesFlag(false);
+        // Y axis uses the same linear-NumberAxis-over-log10-data trick as X,
+        // so we can place an explicit 1/2/5-family tick set in milliseconds.
+        NumberAxis yAxis = new NumberAxis("Latency (ms)") {
+            @Override
+            public List<NumberTick> refreshTicks(Graphics2D g2, AxisState state,
+                                                 Rectangle2D dataArea, RectangleEdge edge) {
+                List<NumberTick> ticks = new ArrayList<>();
+                for (double ms : CHART_LATENCY_TICKS_MS) {
+                    double y = Math.log10(ms);
+                    ticks.add(new NumberTick(TickType.MAJOR, y, Long.toString((long) ms),
+                            TextAnchor.CENTER_RIGHT, TextAnchor.CENTER, 0.0));
+                }
+                return ticks;
+            }
+        };
+        yAxis.setAutoRangeIncludesZero(false);
         plot.setRangeAxis(yAxis);
 
         File out = new File("latency_histogram.png");
