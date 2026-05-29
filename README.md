@@ -68,6 +68,8 @@ The `data/` directory contains the reference datasets:
 
 A Python or Java CLI that lets [Claude](https://www.anthropic.com/claude) answer questions about the weather dataset by calling MCP tools. Each panel in the Grafana dashboard is registered as an in-process MCP tool alongside the official `cratedb-mcp` server, so Claude can run the dashboard's own SQL or fall back to arbitrary queries.
 
+See the [MCP Search overview](src_mcp_search/README.md) for setup, configuration, and a walkthrough of how it works.
+
 | Language | Directory | Driver |
 | -------- | --------- | ------ |
 | [Java](src_mcp_search/main/java/README.md) | `src_mcp_search/main/java/` | [Anthropic Java SDK](https://github.com/anthropics/anthropic-sdk-java) + HTTP `_sql` |
