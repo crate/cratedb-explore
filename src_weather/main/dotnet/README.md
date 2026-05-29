@@ -75,7 +75,34 @@ dotnet run -- <duration-seconds> <host> <requests-per-second> <sslmode> [TYPE:CO
 | `host`                | CrateDB hostname (port `5432` and database `crate` are hard-coded).                        |
 | `requests-per-second` | Target throughput. The loop paces itself so each iteration takes about `1000 / rps` ms. If the database can't keep up the loop just runs as fast as it can. |
 | `sslmode`             | PostgreSQL SSL mode for the Npgsql connection. Common values: `disable`, `prefer`, `require`. Use `require` for CrateDB Cloud and `disable` for a plain local cluster. |
-| `TYPE:COUNT`          | Optional. One or more query-type specifications. Supported types: `WKT`, `REGION`, `FTS`. If omitted, runs WKT queries continuously for the full duration. When multiple types are specified, their queries are shuffled into a random order. |
+| `TYPE:COUNT`          | Optional. One or more query-type specifications. Supported types: `WKT`, `REGION`, `FTS` — see [Query types](#query-types) below. If omitted, runs WKT queries continuously for the full duration. When multiple types are specified, their queries are shuffled into a random order. |
+
+### Query types
+
+Behavioural detail behind the three TYPE codes — what each call samples, which side of CrateDB it stresses, and where the resulting line tends to sit on the latency chart. The SQL itself is in [What it does](#what-it-does) above; this is the operational sketch.
+
+#### `WKT` — geo-proximity scan
+
+- Picks a random `geo_point` from the pre-loaded location pool and a random `timestamp` from the pre-loaded time pool.
+- Issues `SELECT min/max(data['temperature']) … WHERE distance(geo_location, $1::geo_point) < 1 AND measurement_time = $2` — one row out per call (min and max of a single grid cell at a single moment).
+- Exercises CrateDB's spatial filtering on `geo_point`. Typically the cheapest of the three — single point, single timestamp, no joins — so the WKT line sits at the low end of the chart.
+- Requires the `geoPoints` and `timestamps` pools (`LoadGeoPoints` / `LoadTimestamps` at startup).
+
+#### `REGION` — three-table join, latest snapshot
+
+- Picks a random federal-state name from the `german_regions` table.
+- Issues a three-way join across `climate_data`, `german_regions`, `geo_points`, filtered to the most recent `measurement_time` via a correlated subquery, returning every sensor inside the region's polygon with its nearest-town label and a Kelvin → Celsius conversion.
+- Exercises `WITHIN(point, polygon)` containment, the correlated subquery, and an inner join on `geo_location`. Returns dozens of rows per call (one per sensor in the region).
+- Almost always the slowest query type — the REGION line sits at the top of the chart.
+- Requires the `regionNames` pool.
+
+#### `FTS` — full-text relevance ranking
+
+- Picks a random search term from a fixed set (`cars`, `trains`, `factories`, `energy`).
+- Issues `SELECT region_name, _score FROM german_regions WHERE MATCH(economics, $1) ORDER BY _score DESC LIMIT 3`.
+- Exercises the full-text index on the `economics` column and CrateDB's `MATCH` predicate. `_score` is computed by the Lucene-based search engine and exposed as a built-in column. Always 3 rows out.
+- Fast in steady state — typically clusters with WKT at the bottom of the chart, with occasional tail spikes on cold matches.
+- No pre-loaded pool needed; the search terms are inline.
 
 ### Examples
 
