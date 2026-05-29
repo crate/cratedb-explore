@@ -2,6 +2,9 @@
 .idea/
 *.iml
 
+# Claude Code (per-user overrides — keep out of the shared repo)
+.claude/settings.local.json
+
 # macOS
 .DS_Store
 
