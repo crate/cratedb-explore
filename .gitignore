@@ -5,6 +5,9 @@
 # Claude Code (per-user overrides — keep out of the shared repo)
 .claude/settings.local.json
 
+# Per-run latency chart output (canonical screenshots live in doc/)
+src_weather/main/*/latency_histogram.png
+
 # macOS
 .DS_Store
 
