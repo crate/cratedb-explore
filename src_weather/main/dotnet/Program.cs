@@ -89,6 +89,10 @@ const string FtsSql =
 string[] ftsTerms = ["cars", "trains", "factories", "energy"];
 HashSet<string> validQueryTypes = ["WKT", "REGION", "FTS"];
 
+// Percentiles plotted on the latency chart. Spaced to give the long tail
+// (p99 → p99.99) visible separation under a log-scaled X axis.
+double[] chartPercentiles = [50, 75, 90, 95, 99, 99.9, 99.99];
+
 // Populated once at startup from the database and sampled randomly during the workload.
 List<(double x, double y)> geoPoints = [];
 List<DateTime> timestamps = [];
@@ -367,6 +371,45 @@ void RunWorkload(NpgsqlConnection conn, long durationSecs, int rps, List<string>
     }
 
     PrintHistograms(histograms);
+    RenderChart(histograms);
+}
+
+void RenderChart(Dictionary<string, LongHistogram> histograms)
+{
+    if (histograms.Count == 0) return;
+
+    var plot = new ScottPlot.Plot();
+    foreach (var (name, h) in histograms)
+    {
+        // ScottPlot 5.x has no built-in log-axis transform, so log10 the X
+        // values ourselves and re-label the ticks in the original space.
+        var xs = chartPercentiles.Select(p => Math.Log10(1.0 / (1.0 - p / 100.0))).ToArray();
+        var ys = chartPercentiles.Select(p => (double)h.GetValueAtPercentile(p)).ToArray();
+        var scatter = plot.Add.Scatter(xs, ys);
+        scatter.LegendText = name;
+    }
+
+    // Relabel the log-spaced X axis with human percentile names instead of
+    // the underlying log10(1/(1-p/100)) values.
+    double[] tickPcts = [50, 90, 99, 99.9, 99.99];
+    var tickPositions = tickPcts.Select(p => Math.Log10(1.0 / (1.0 - p / 100.0))).ToArray();
+    var tickLabels = tickPcts.Select(p => $"{p}%").ToArray();
+    plot.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericManual(tickPositions, tickLabels);
+
+    plot.Title("Latency percentile distribution");
+    plot.XLabel("Percentile");
+    plot.YLabel("Latency (ms)");
+
+    var outPath = Path.GetFullPath("latency_histogram.png");
+    try
+    {
+        plot.SavePng(outPath, 1000, 600);
+        Console.WriteLine($"Wrote chart: {outPath}");
+    }
+    catch (Exception e)
+    {
+        Console.Error.WriteLine($"Failed to write chart: {e.Message}");
+    }
 }
 
 void ExecuteWktQuery(NpgsqlConnection conn, Dictionary<string, LongHistogram> histograms)

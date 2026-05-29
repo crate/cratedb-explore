@@ -107,6 +107,10 @@ FTS_TERMS = ["cars", "trains", "factories", "energy"]
 
 VALID_QUERY_TYPES = {"WKT", "REGION", "FTS"}
 
+# Percentiles plotted on the latency chart. Spaced to give the long tail
+# (p99 → p99.99) visible separation under a log-scaled X axis.
+CHART_PERCENTILES = [50, 75, 90, 95, 99, 99.9, 99.99]
+
 # Populated once at startup from the database and then sampled randomly during the workload.
 geo_points: list[tuple[float, float]] = []
 timestamps: list = []
@@ -224,6 +228,52 @@ def print_histograms(histograms: dict[str, HdrHistogram]):
         )
 
 
+def render_chart(histograms: dict[str, HdrHistogram]):
+    """Write a percentile-distribution PNG (one line per query type) to
+    latency_histogram.png in the working directory. X axis is
+    1/(1-percentile/100) on a log scale so the tail (p99 → p99.99) is
+    visible; Y axis is latency in ms.
+    """
+    if not histograms:
+        return
+    # Lazy import keeps the matplotlib startup cost off the happy path
+    # for users who only want the textual summary.
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import FixedLocator, FixedFormatter, NullLocator
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for name, h in histograms.items():
+        xs = [1.0 / (1.0 - p / 100.0) for p in CHART_PERCENTILES]
+        ys = [h.get_value_at_percentile(p) for p in CHART_PERCENTILES]
+        ax.plot(xs, ys, marker="o", label=name)
+    ax.set_xscale("log")
+
+    # Relabel the log-spaced X axis with human percentile names so the
+    # tail (p99 → p99.99) reads as percentages, not as 100 → 10000.
+    tick_pcts = [50, 90, 99, 99.9, 99.99]
+    ax.xaxis.set_major_locator(FixedLocator([1.0 / (1.0 - p / 100.0) for p in tick_pcts]))
+    ax.xaxis.set_major_formatter(FixedFormatter([f"{p}%" for p in tick_pcts]))
+    ax.xaxis.set_minor_locator(NullLocator())
+
+    ax.set_xlabel("Percentile")
+    ax.set_ylabel("Latency (ms)")
+    ax.set_title("Latency percentile distribution")
+    ax.legend()
+    ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+    fig.tight_layout()
+
+    out = "latency_histogram.png"
+    try:
+        fig.savefig(out)
+        print(f"Wrote chart: {os.path.abspath(out)}")
+    except Exception as e:
+        print(f"Failed to write chart: {e}", file=sys.stderr)
+    finally:
+        plt.close(fig)
+
+
 def throttle(start: float, target_gap_s: float):
     """Simple rate limiter: sleeps for the remaining time in the target interval."""
     elapsed = time.monotonic() - start
@@ -269,6 +319,7 @@ def run_workload(cur, duration_seconds, requests_per_second, work_list, indefini
             throttle(start, target_gap_s)
 
     print_histograms(histograms)
+    render_chart(histograms)
 
 
 def main():

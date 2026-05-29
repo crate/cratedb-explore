@@ -14,8 +14,25 @@
  * limitations under the License.
  */
 import org.HdrHistogram.Histogram;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartUtils;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.axis.AxisState;
+import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.axis.NumberTick;
+import org.jfree.chart.axis.TickType;
+import org.jfree.chart.plot.PlotOrientation;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.chart.ui.RectangleEdge;
+import org.jfree.chart.ui.TextAnchor;
+import org.jfree.data.xy.XYSeries;
+import org.jfree.data.xy.XYSeriesCollection;
 import org.postgresql.geometric.PGpoint;
 
+import java.awt.Graphics2D;
+import java.awt.geom.Rectangle2D;
+import java.io.File;
+import java.io.IOException;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -120,7 +137,15 @@ public class QueryCrate {
     private static final List<Timestamp> timestamps = new ArrayList<>();
     private static final List<String> regionNames = new ArrayList<>();
 
+    // Percentiles plotted on the latency chart. Spaced to give the long tail
+    // (p99 → p99.99) visible separation under a log-scaled X axis.
+    private static final double[] CHART_PERCENTILES = {50, 75, 90, 95, 99, 99.9, 99.99};
+
     public static void main(String[] args) {
+        // JFreeChart writes the PNG via BufferedImage, which doesn't require a
+        // display — but on macOS the JVM otherwise pops a dock icon. Suppress it.
+        System.setProperty("java.awt.headless", "true");
+
         if (args.length < 4) {
             printUsageAndExit();
         }
@@ -343,6 +368,7 @@ public class QueryCrate {
 
         // Print the collected latency histograms so the user can see p50/p99/etc. for each type.
         printHistograms(histograms);
+        renderChart(histograms);
     }
 
     private static void executeWktQuery(PreparedStatement ps, Map<String, Histogram> histograms) throws SQLException {
@@ -417,6 +443,66 @@ public class QueryCrate {
         long latency = System.currentTimeMillis() - startMs;
         histograms.computeIfAbsent(type, k -> new Histogram(60_000, 3))
                   .recordValue(Math.max(latency, 0));
+    }
+
+    // Percentile values whose ticks get a human label on the X axis. Anything
+    // not in this list is plotted but not labeled.
+    private static final double[] CHART_LABELED_PERCENTILES = {50, 90, 99, 99.9, 99.99};
+
+    // Writes a percentile-distribution PNG (one line per query type) to
+    // latency_histogram.png in the working directory. X values are
+    // log10(1/(1-p/100)) on a linear NumberAxis — this gives the tail
+    // (p99 → p99.99) visible separation while letting us label ticks
+    // directly as "50%", "90%", … rather than 2, 10, 100. Y axis is
+    // latency in ms.
+    private static void renderChart(Map<String, Histogram> histograms) {
+        if (histograms.isEmpty()) return;
+
+        XYSeriesCollection dataset = new XYSeriesCollection();
+        for (Map.Entry<String, Histogram> entry : histograms.entrySet()) {
+            XYSeries series = new XYSeries(entry.getKey());
+            for (double p : CHART_PERCENTILES) {
+                double x = Math.log10(1.0 / (1.0 - p / 100.0));
+                series.add(x, entry.getValue().getValueAtPercentile(p));
+            }
+            dataset.addSeries(series);
+        }
+
+        JFreeChart chart = ChartFactory.createXYLineChart(
+                "Latency percentile distribution",
+                "Percentile",
+                "Latency (ms)",
+                dataset,
+                PlotOrientation.VERTICAL,
+                true, false, false);
+
+        XYPlot plot = chart.getXYPlot();
+        // Custom NumberAxis: keep the linear coordinate system but emit only
+        // the manually-placed percentile ticks.
+        NumberAxis xAxis = new NumberAxis("Percentile") {
+            @Override
+            public List<NumberTick> refreshTicks(Graphics2D g2, AxisState state,
+                                                 Rectangle2D dataArea, RectangleEdge edge) {
+                List<NumberTick> ticks = new ArrayList<>();
+                for (double p : CHART_LABELED_PERCENTILES) {
+                    double x = Math.log10(1.0 / (1.0 - p / 100.0));
+                    String label = (p == Math.floor(p) ? Long.toString((long) p) : Double.toString(p)) + "%";
+                    ticks.add(new NumberTick(TickType.MAJOR, x, label,
+                            TextAnchor.TOP_CENTER, TextAnchor.CENTER, 0.0));
+                }
+                return ticks;
+            }
+        };
+        xAxis.setAutoRangeIncludesZero(false);
+        plot.setDomainAxis(xAxis);
+
+        File out = new File("latency_histogram.png");
+        try {
+            ChartUtils.saveChartAsPNG(out, chart, 1000, 600);
+            System.out.println("Wrote chart: " + out.getAbsolutePath());
+        } catch (IOException e) {
+            System.err.println("Failed to write chart: " + e.getMessage());
+        }
     }
 
     // Prints a percentile summary for each query type.
