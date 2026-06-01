@@ -101,3 +101,16 @@ LIMIT 1;
 
 Temperatures are stored in Kelvin; the model is asked to report Celsius first
 with Kelvin in parentheses, e.g. `-8.99 C (264.16 K)`.
+
+## Default to the latest data
+
+When a query touches `geo_points` and you don't ask for a specific time range,
+the model is told to restrict it to the most recent readings rather than scan
+the whole history:
+
+```sql
+WHERE measurement_time = (SELECT MAX(d2.measurement_time) FROM demo.climate_data d2)
+```
+
+This keeps "where is it coldest right now?"-style questions fast and scoped to
+the latest snapshot.

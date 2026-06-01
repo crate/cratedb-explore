@@ -45,8 +45,9 @@ pip install "mcp[cli]" httpx
 
 ## Step 2 — Create the Server
 
-Save the following as `german_weather_mcp.py`. It connects to CrateDB, then
-defines a single tool that runs SQL against the `demo` schema.
+Save the following as [`german_weather_mcp.py`](https://github.com/crate/cratedb-explore/blob/main/src_mcp_search/german_weather_mcp.py).
+It connects to CrateDB, then defines a single tool that runs SQL against the
+`demo` schema.
 
 ```python
 import httpx
@@ -63,7 +64,10 @@ INSTRUCTIONS = (
     "first with Kelvin in parentheses, e.g. -8.99 C (264.16 K). For any "
     "'where in Germany' question you must restrict candidates with "
     "WITHIN(c.geo_location, r.geo_coords), joining climate_data to "
-    "german_regions, because geo_points includes near-border foreign towns."
+    "german_regions, because geo_points includes near-border foreign towns. "
+    "When a query touches geo_points and the user gives no time range, limit it "
+    "to the latest data with measurement_time = (SELECT MAX(d2.measurement_time) "
+    "FROM demo.climate_data d2)."
 )
 
 mcp = FastMCP("german-weather", instructions=INSTRUCTIONS)
@@ -96,8 +100,15 @@ Three details make this work against CrateDB:
   stateless, so this header is the durable equivalent of `SET search_path TO
   demo` and lets the assistant use unqualified table names.
 - The `instructions` and the tool description carry the data rules — Kelvin
-  display and the geographic filter — so the assistant applies them without
-  being reminded in every prompt.
+  display, the geographic filter, and a default to the latest data — so the
+  assistant applies them without being reminded in every prompt.
+
+When a question about station locations gives no time range, the assistant
+scopes the query to the most recent readings rather than the whole history:
+
+```sql
+WHERE measurement_time = (SELECT MAX(d2.measurement_time) FROM demo.climate_data d2)
+```
 
 ## Step 3 — Register the Server
 

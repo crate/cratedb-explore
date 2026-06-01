@@ -84,7 +84,10 @@ INSTRUCTIONS = (
     "For ANY 'where in Germany' / most-extreme-place question you MUST "
     "restrict candidates with WITHIN(c.geo_location, r.geo_coords) by joining "
     "climate_data c to german_regions r; geo_points alone leaks near-border "
-    "foreign towns (e.g. Tannheim in Tyrol)."
+    "foreign towns (e.g. Tannheim in Tyrol). "
+    "When a query touches geo_points and the user gives no time range, limit it "
+    "to the latest data with measurement_time = (SELECT MAX(d2.measurement_time) "
+    "FROM demo.climate_data d2)."
 )
 
 mcp = FastMCP("german-weather", instructions=INSTRUCTIONS)
@@ -100,6 +103,10 @@ def query_sql(statement: str) -> str:
     demo.german_regions r - do NOT use geo_points or DISTANCE() alone as the
     country filter (geo_points contains near-border foreign towns). Temperatures
     are Kelvin: report Celsius first with Kelvin in parentheses.
+
+    When a query touches geo_points and the user gives no time range, limit it
+    to the latest data with
+    measurement_time = (SELECT MAX(d2.measurement_time) FROM demo.climate_data d2).
     """
     # CrateDB's HTTP _sql endpoint is stateless, so the persistent equivalent
     # of `SET search_path TO demo` is the Default-Schema header on each request.
