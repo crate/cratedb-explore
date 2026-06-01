@@ -5,17 +5,17 @@ in real time with SQL. The Model Context Protocol (MCP) takes this a step
 further: it connects an AI assistant directly to your cluster, so you can ask
 questions in plain English and let the assistant write the SQL.
 
-This guide builds a small MCP server over a German weather dataset — a stream of
+This guide builds a small MCP server over the [German dataset](https://github.com/crate/cratedb-explore) we used earlier — a stream of
 real-time sensor readings of the kind a typical IoT deployment produces. In a
 few minutes you will have an assistant that answers questions such as "What was
 the coldest place in Germany yesterday?" against live data.
 
-## What You'll Build
+## What you'll do
 
-A single Python file that runs as an MCP server and exposes one tool,
-`query_sql`. The tool sends statements to CrateDB's HTTP `_sql` endpoint and
-returns the rows. Any MCP-capable assistant — Claude Code or Claude Desktop, for
-example — can then discover the tool and use it to answer your questions.
+You'll write a single Python file that runs as an MCP server and exposes one
+tool, `query_sql`. The tool sends statements to CrateDB's HTTP `_sql` endpoint
+and returns the rows. Any MCP-capable assistant — Claude Code or Claude Desktop,
+for example — can then discover the tool and use it to answer your questions.
 
 ## Prerequisites
 
@@ -50,21 +50,107 @@ It connects to CrateDB, then defines a single tool that runs SQL against the
 `demo` schema.
 
 ```python
+"""
+Minimal MCP server over the CrateDB German-weather demo schema.
+
+Exposes one tool, `query_sql`, that runs SQL against CrateDB's HTTP `_sql`
+endpoint under the `demo` schema. Register it with any MCP client (Claude
+Code, Claude Desktop, ...) over stdio — see README.md.
+
+The one rule worth encoding: "in Germany" questions must be polygon-filtered
+with WITHIN(...), because demo.geo_points holds near-border foreign towns. That
+rule is stated in both the tool description and the server `instructions` so the
+connecting model applies it.
+
+Connection defaults to a local cluster (crate@localhost:4200) and can be
+overridden with --cratedb-url / --cratedb-host / ... flags or the matching
+CRATEDB_* environment variables (flags win).
+"""
+
+import argparse
+import os
+from urllib.parse import urlparse
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-ENDPOINT = "http://localhost:4200/_sql"
-AUTH = ("crate", "a_password")
+# Fallbacks so the server runs with no arguments.
+DEFAULTS = {
+    "host": "localhost",
+    "port": "4200",
+    "user": "crate",
+    "password": "a_password",
+    "scheme": "http",
+}
+
+
+def parse_args() -> argparse.Namespace:
+    """CLI flags. All default to None so environment variables can layer
+    underneath them in resolve_endpoint."""
+    p = argparse.ArgumentParser(
+        description="MCP server over the CrateDB German-weather demo schema.",
+    )
+    p.add_argument("--cratedb-url", help="Full URL, e.g. http://user:pw@host:4200/")
+    p.add_argument("--cratedb-host", help="CrateDB host.")
+    p.add_argument("--cratedb-port", help="CrateDB HTTP port (default 4200).")
+    p.add_argument("--cratedb-user", help="CrateDB username.")
+    p.add_argument("--cratedb-password", help="CrateDB password.")
+    p.add_argument("--cratedb-scheme", help="http or https.")
+    return p.parse_args()
+
+
+def resolve_endpoint(args: argparse.Namespace) -> tuple[str, tuple[str, str]]:
+    """Resolve the `_sql` endpoint URL and HTTP Basic auth.
+
+    Either a full --cratedb-url / CRATEDB_CLUSTER_URL is supplied, or the
+    pieces are assembled from --cratedb-host / CRATEDB_HOST and friends.
+    CLI flags always win over environment variables, and anything still
+    missing falls back to a local cluster so the example runs out of the box.
+
+    Precedence is, in order: the --cratedb-url flag; any individual
+    --cratedb-* flag (which forces the host-parts path so a
+    CRATEDB_CLUSTER_URL in the environment can't silently override it);
+    CRATEDB_CLUSTER_URL; then host parts from CRATEDB_* env vars / defaults.
+    """
+    part_flags = (
+        args.cratedb_host,
+        args.cratedb_port,
+        args.cratedb_user,
+        args.cratedb_password,
+        args.cratedb_scheme,
+    )
+    url = args.cratedb_url or (
+        os.environ.get("CRATEDB_CLUSTER_URL") if not any(part_flags) else None
+    )
+    if url:
+        u = urlparse(url)
+        scheme = u.scheme or DEFAULTS["scheme"]
+        host = u.hostname or DEFAULTS["host"]
+        port = str(u.port or DEFAULTS["port"])
+        user = u.username or DEFAULTS["user"]
+        password = u.password or DEFAULTS["password"]
+    else:
+        scheme = args.cratedb_scheme or os.environ.get("CRATEDB_SCHEME") or DEFAULTS["scheme"]
+        host = args.cratedb_host or os.environ.get("CRATEDB_HOST") or DEFAULTS["host"]
+        port = args.cratedb_port or os.environ.get("CRATEDB_PORT") or DEFAULTS["port"]
+        user = args.cratedb_user or os.environ.get("CRATEDB_USER") or DEFAULTS["user"]
+        password = args.cratedb_password or os.environ.get("CRATEDB_PASSWORD") or DEFAULTS["password"]
+    return f"{scheme}://{host}:{port}/_sql", (user, password)
+
+
+ENDPOINT, AUTH = resolve_endpoint(parse_args())
 
 INSTRUCTIONS = (
-    "Tools query German weather data in the `demo` schema: climate_data "
-    "(geo_location, measurement_time, data['temperature'] in Kelvin), "
-    "german_regions (16 states with geo_coords polygons), and geo_points "
-    "(station locations). Temperatures are Kelvin, so always show Celsius "
-    "first with Kelvin in parentheses, e.g. -8.99 C (264.16 K). For any "
-    "'where in Germany' question you must restrict candidates with "
-    "WITHIN(c.geo_location, r.geo_coords), joining climate_data to "
-    "german_regions, because geo_points includes near-border foreign towns. "
+    "Tools query a CrateDB cluster of German weather data in the `demo` "
+    "schema: climate_data (geo_location geo_point, measurement_time, "
+    "data['temperature'] in Kelvin), german_regions (16 Laender with "
+    "geo_coords polygons), geo_points (station locations). "
+    "Temperatures are Kelvin - always show Celsius first, Kelvin in "
+    "parentheses, e.g. -8.99 C (264.16 K). "
+    "For ANY 'where in Germany' / most-extreme-place question you MUST "
+    "restrict candidates with WITHIN(c.geo_location, r.geo_coords) by joining "
+    "climate_data c to german_regions r; geo_points alone leaks near-border "
+    "foreign towns (e.g. Tannheim in Tyrol). "
     "When a query touches geo_points and the user gives no time range, limit it "
     "to the latest data with measurement_time = (SELECT MAX(d2.measurement_time) "
     "FROM demo.climate_data d2)."
@@ -75,25 +161,48 @@ mcp = FastMCP("german-weather", instructions=INSTRUCTIONS)
 
 @mcp.tool()
 def query_sql(statement: str) -> str:
-    """Run a read-only SQL statement against the CrateDB `demo` schema."""
-    response = httpx.post(
+    """Run a read-only SQL statement against the CrateDB `demo` schema and
+    return columns + rows.
+
+    "In Germany" / most-extreme-place questions MUST polygon-filter candidates
+    with WITHIN(c.geo_location, r.geo_coords), joining demo.climate_data c to
+    demo.german_regions r - do NOT use geo_points or DISTANCE() alone as the
+    country filter (geo_points contains near-border foreign towns). Temperatures
+    are Kelvin: report Celsius first with Kelvin in parentheses.
+
+    When a query touches geo_points and the user gives no time range, limit it
+    to the latest data with
+    measurement_time = (SELECT MAX(d2.measurement_time) FROM demo.climate_data d2).
+    """
+    # CrateDB's HTTP _sql endpoint is stateless, so the persistent equivalent
+    # of `SET search_path TO demo` is the Default-Schema header on each request.
+    r = httpx.post(
         ENDPOINT,
         json={"stmt": statement},
         auth=AUTH,
         headers={"Default-Schema": "demo"},
         timeout=60,
     )
-    response.raise_for_status()
-    data = response.json()
-    return f"columns: {data['cols']}\nrows: {data['rows']}"
+    r.raise_for_status()
+    data = r.json()
+    cols, rows = data.get("cols", []), data.get("rows", [])
+    lines = [f"columns: {cols}", f"row count: {len(rows)}"]
+    lines += [f"  {row}" for row in rows[:50]]
+    if len(rows) > 50:
+        lines.append(f"  ... {len(rows) - 50} more rows omitted")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
     mcp.run()
 ```
 
-Three details make this work against CrateDB:
+A few details make this work against CrateDB:
 
+- The connection is resolved once at startup by `resolve_endpoint`, which reads
+  the `--cratedb-*` flags, then the matching `CRATEDB_*` environment variables,
+  and falls back to a local `crate@localhost:4200` cluster — so the example runs
+  out of the box and still points at a remote cluster when you pass flags.
 - The server posts to the HTTP `_sql` endpoint on port `4200` and reads the
   `cols` and `rows` from the JSON response.
 - Each request carries a `Default-Schema: demo` header. The `_sql` endpoint is
@@ -117,6 +226,11 @@ For Claude Code, add the server from the command line:
 ```bash
 claude mcp add german-weather -- python /path/to/german_weather_mcp.py
 ```
+
+With no flags the server connects to a local `crate@localhost:4200`. To point it
+at a different cluster, append connection flags after the script path — for
+example `--cratedb-url https://user:pw@host:4200/` (or set the matching
+`CRATEDB_*` environment variables).
 
 For Claude Desktop, add an entry to `claude_desktop_config.json`:
 
