@@ -126,11 +126,15 @@ Restart the assistant so it picks up the new server.
 
 With the server registered, ask a question in natural language:
 
-> What was the coldest place in Germany on 2025-12-31?
+> What is the single lowest temperature reading anywhere inside Germany?
 
 The assistant writes and runs the SQL through `query_sql`, then answers with the
-town and its temperature in Celsius first and Kelvin in parentheses, for
-example: "The coldest place was Oberstdorf at -12.4 C (260.75 K)."
+temperature in Celsius first and Kelvin in parentheses. Run against the demo
+cluster, it returns:
+
+> The single lowest temperature reading anywhere inside Germany is
+> **-10.41 C (262.74 K)**, at `[12.75, 50.5]` in the Vogtland area of Saxony,
+> near the Czech border.
 
 ## Filtering by Geography
 
@@ -153,7 +157,12 @@ LIMIT 1;
 ```
 
 Because the rule lives in the server's instructions, the assistant adds the
-`WITHIN` join on its own whenever a question is scoped to Germany.
+`WITHIN` join on its own whenever a question is scoped to Germany. The
+lowest-temperature question above shows it working: the three coldest values in
+the raw data — down to 261.08 K (-12.07 C) — all sit at `[10.5, 47.5]`, which is
+Tannheim in Tyrol, just outside the German polygons. The polygon join excludes
+them, so the lowest reading that is genuinely inside Germany is the -10.41 C
+(262.74 K) value reported above.
 
 ## Next Steps
 
