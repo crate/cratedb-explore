@@ -247,6 +247,17 @@ For Claude Desktop, add an entry to `claude_desktop_config.json`:
 
 Restart the assistant so it picks up the new server.
 
+Then confirm it connected before moving on. In Claude Code, run `claude mcp list`
+(or `/mcp` from inside a session) and check that `german-weather` shows as
+connected with the `query_sql` tool available; in Claude Desktop, the tool
+appears under the tools (hammer) icon. If it doesn't show up, the usual causes
+are a wrong path to `german_weather_mcp.py` or a `python` that can't see the
+installed `mcp`/`httpx` packages — run `python /path/to/german_weather_mcp.py`
+directly to surface those errors (it should start and wait silently for input;
+press Ctrl+C to stop it). The CrateDB connection itself isn't tested until the
+first query, so a cluster that's down or unreachable surfaces as an error in
+Step 4 rather than here.
+
 ## Step 4 — Ask a Question
 
 With the server registered, ask a question in natural language:
