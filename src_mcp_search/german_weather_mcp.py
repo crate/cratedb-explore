@@ -89,10 +89,13 @@ def resolve_endpoint(args: argparse.Namespace) -> tuple[str, tuple[str, str]]:
 ENDPOINT, AUTH = resolve_endpoint(parse_args())
 
 INSTRUCTIONS = (
-    "Tools query a CrateDB cluster of German weather data in the `demo` "
-    "schema: climate_data (geo_location geo_point, measurement_time, "
-    "data['temperature'] in Kelvin), german_regions (16 Laender with "
-    "geo_coords polygons), geo_points (station locations). "
+    "Tools query a CrateDB cluster of German weather and regional data in the "
+    "`demo` schema: climate_data (geo_location geo_point, measurement_time, "
+    "data['temperature'] in Kelvin), german_regions (16 Laender with geo_coords "
+    "polygons plus full-text columns economics, transportation and "
+    "introduced_species - use MATCH() on these to answer questions about a "
+    "region's industry (e.g. car factories), transport or wildlife), geo_points "
+    "(station locations). "
     "Temperatures are Kelvin - always show Celsius first, Kelvin in "
     "parentheses, e.g. -8.99 C (264.16 K). "
     "For ANY 'where in Germany' / most-extreme-place question you MUST "
@@ -111,6 +114,11 @@ mcp = FastMCP("german-weather", instructions=INSTRUCTIONS)
 def query_sql(statement: str) -> str:
     """Run a read-only SQL statement against the CrateDB `demo` schema and
     return columns + rows.
+
+    Beyond weather readings, german_regions carries full-text economics,
+    transportation and introduced_species columns - answer questions about a
+    region's industry (e.g. car factories), transport or wildlife with
+    MATCH(<column>, '<terms>') rather than assuming the data is weather-only.
 
     "In Germany" / most-extreme-place questions MUST polygon-filter candidates
     with WITHIN(c.geo_location, r.geo_coords), joining demo.climate_data c to
