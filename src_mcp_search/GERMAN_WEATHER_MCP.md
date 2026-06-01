@@ -231,42 +231,70 @@ WHERE measurement_time = (SELECT MAX(d2.measurement_time) FROM demo.climate_data
 
 ## Step 3 — Register the server
 
-First smoke-test the script on its own, so you register something that runs. An
-MCP client normally launches the server for you over stdio, but running it by
-hand confirms `python` can import `mcp`/`httpx` and find the file:
+### Point the server at your cluster
+
+The server has to be told where CrateDB is. It reads the connection from
+`--cratedb-*` flags (or the matching `CRATEDB_*` environment variables) and only
+falls back to `crate@localhost:4200` if you pass nothing — so unless you happen
+to be running CrateDB locally with the default user, **you must supply
+connection parameters**. The simplest is a single URL:
 
 ```bash
-python /path/to/german_weather_mcp.py
+--cratedb-url "https://<user>:<password>@<host>:4200/"
+```
+
+or set the equivalent pieces as environment variables before launching:
+
+```bash
+export CRATEDB_HOST=<host>
+export CRATEDB_USER=<user>
+export CRATEDB_PASSWORD=<password>
+export CRATEDB_SCHEME=https        # http for a plain local cluster
+```
+
+Every command below shows the URL flag; drop it only if your cluster really is
+the local default.
+
+### Smoke-test the script
+
+First run the script on its own, so you register something that runs. An MCP
+client normally launches the server for you over stdio, but running it by hand
+confirms `python` can import `mcp`/`httpx` and find the file:
+
+```bash
+python /path/to/german_weather_mcp.py --cratedb-url "https://<user>:<password>@<host>:4200/"
 ```
 
 It should start and then wait silently for input on stdin (it's a stdio server
 with no banner) — that means it launched cleanly; press Ctrl+C to stop it. If it
 exits with a traceback instead, fix that before going on: the usual causes are a
 wrong path to `german_weather_mcp.py` or a `python` that can't see the installed
-`mcp`/`httpx` packages. The CrateDB connection itself isn't tested here — it's
-only exercised on the first query, in Step 4.
+`mcp`/`httpx` packages. The CrateDB connection itself isn't tested here — bad
+host or credentials only surface on the first query, in Step 4.
 
-With that confirmed, register the server with your assistant.
+### Register with your assistant
 
-For Claude Code, add the server from the command line:
+For Claude Code, add the server from the command line — everything after `--` is
+the launch command, so the connection flag goes there too:
 
 ```bash
-claude mcp add german-weather -- python /path/to/german_weather_mcp.py
+claude mcp add german-weather -- python /path/to/german_weather_mcp.py --cratedb-url "https://<user>:<password>@<host>:4200/"
 ```
 
-With no flags the server connects to a local `crate@localhost:4200`. To point it
-at a different cluster, append connection flags after the script path — for
-example `--cratedb-url https://user:pw@host:4200/` (or set the matching
-`CRATEDB_*` environment variables).
-
-For Claude Desktop, add an entry to `claude_desktop_config.json`:
+For Claude Desktop, add an entry to `claude_desktop_config.json`, passing the
+connection flag as its own argument (or set the `CRATEDB_*` vars in an `env`
+block instead):
 
 ```json
 {
   "mcpServers": {
     "german-weather": {
       "command": "python",
-      "args": ["/path/to/german_weather_mcp.py"]
+      "args": [
+        "/path/to/german_weather_mcp.py",
+        "--cratedb-url",
+        "https://<user>:<password>@<host>:4200/"
+      ]
     }
   }
 }
