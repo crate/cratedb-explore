@@ -52,10 +52,24 @@ def resolve_endpoint(args: argparse.Namespace) -> tuple[str, tuple[str, str]]:
 
     Either a full --cratedb-url / CRATEDB_CLUSTER_URL is supplied, or the
     pieces are assembled from --cratedb-host / CRATEDB_HOST and friends.
-    CLI flags win over environment variables, and anything still missing
-    falls back to a local cluster so the example runs out of the box.
+    CLI flags always win over environment variables, and anything still
+    missing falls back to a local cluster so the example runs out of the box.
+
+    Precedence is, in order: the --cratedb-url flag; any individual
+    --cratedb-* flag (which forces the host-parts path so a
+    CRATEDB_CLUSTER_URL in the environment can't silently override it);
+    CRATEDB_CLUSTER_URL; then host parts from CRATEDB_* env vars / defaults.
     """
-    url = args.cratedb_url or os.environ.get("CRATEDB_CLUSTER_URL")
+    part_flags = (
+        args.cratedb_host,
+        args.cratedb_port,
+        args.cratedb_user,
+        args.cratedb_password,
+        args.cratedb_scheme,
+    )
+    url = args.cratedb_url or (
+        os.environ.get("CRATEDB_CLUSTER_URL") if not any(part_flags) else None
+    )
     if url:
         u = urlparse(url)
         scheme = u.scheme or DEFAULTS["scheme"]
