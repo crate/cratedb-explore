@@ -288,6 +288,7 @@ SELECT g.nearest_town, c.data['temperature'] AS kelvin
 FROM demo.climate_data c
 JOIN demo.german_regions r ON WITHIN(c.geo_location, r.geo_coords)
 JOIN demo.geo_points g ON g.geo_location = c.geo_location
+WHERE c.measurement_time = (SELECT MAX(d2.measurement_time) FROM demo.climate_data d2)
 ORDER BY kelvin ASC
 LIMIT 1;
 ```
@@ -317,7 +318,7 @@ over the HTTP `_sql` endpoint, the round-trip latencies are:
 The point-in-polygon `WITHIN` join is the expensive part of any "in Germany"
 query. Scoping `climate_data` to the latest snapshot before that join, as the
 server's instructions ask, keeps the coldest-stations question near 100 ms —
-roughly 75 times faster than the unscoped polygon scan in the bottom row.
+roughly 80 times faster than the unscoped polygon scan in the bottom row.
 
 ## Next Steps
 
