@@ -64,17 +64,9 @@ The `data/` directory contains the reference datasets:
 
 ## MCP Search (Claude + CrateDB)
 
-<img src="doc/mcp_server.png" alt="MCP search CLI in action" width="100%">
+A minimal Python [MCP](https://modelcontextprotocol.io) server that exposes a single `query_sql` tool over the weather dataset, so an MCP client like [Claude](https://www.anthropic.com/claude) can answer questions about the data in plain English. It is built on the official MCP Python SDK (`FastMCP`) and talks to CrateDB's HTTP `_sql` endpoint. The one non-trivial rule — using `WITHIN` to keep "in Germany" queries inside the country's borders — is baked into the server's instructions.
 
-A Python or Java CLI that lets [Claude](https://www.anthropic.com/claude) answer questions about the weather dataset by calling MCP tools. Each panel in the Grafana dashboard is registered as an in-process MCP tool alongside the official `cratedb-mcp` server, so Claude can run the dashboard's own SQL or fall back to arbitrary queries.
-
-See the [MCP Search overview](src_mcp_search/README.md) for setup, configuration, and a walkthrough of how it works.
-
-| Language | Directory | Driver |
-| -------- | --------- | ------ |
-| [Java](src_mcp_search/main/java/README.md) | `src_mcp_search/main/java/` | [Anthropic Java SDK](https://github.com/anthropics/anthropic-sdk-java) + HTTP `_sql` |
-| [Python](src_mcp_search/main/python/README.md) | `src_mcp_search/main/python/` | [claude-agent-sdk](https://github.com/anthropics/claude-agent-sdk-python) + [cratedb-mcp](https://github.com/crate/cratedb-mcp) |
-| [.NET (C#)](src_mcp_search/main/dotnet/README.md) | `src_mcp_search/main/dotnet/` | `HttpClient` + `System.Text.Json` + HTTP `_sql` |
+See the [MCP Search overview](src_mcp_search/README.md) for install, configuration, and how to register it with an assistant. A draft cratedb.com walkthrough lives in [`GERMAN_WEATHER_MCP.md`](src_mcp_search/GERMAN_WEATHER_MCP.md).
 
 ## Grafana Dashboard
 

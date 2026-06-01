@@ -18,6 +18,5 @@
     <modules>
         <module>src_weather/main/java</module>
         <module>src_knn_search/main/java</module>
-        <module>src_mcp_search/main/java</module>
     </modules>
 </project>
