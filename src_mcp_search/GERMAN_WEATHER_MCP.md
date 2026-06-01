@@ -373,7 +373,7 @@ roughly 80 times faster than the unscoped polygon scan in the bottom row.
 
 ## Quirks
 
-As of the time of writing Claude (4.8) is mistaking invalid column names 
+As of the time of writing Claude (4.8) is sometimes mistaking invalid column names 
 for '404' errors, but then continuing.
 
 ## Next steps
