@@ -150,6 +150,14 @@ INSTRUCTIONS = (
     "introduced_species - use MATCH() on these to answer questions about a "
     "region's industry (e.g. car factories), transport or wildlife), geo_points "
     "(station locations). "
+    "MANDATORY FIRST STEP: never run a data query without first confirming the "
+    "actual table and column names. Before any SELECT against the data, query "
+    "information_schema (e.g. SELECT table_name FROM information_schema.tables "
+    "WHERE table_schema = 'demo', then SELECT column_name, data_type FROM "
+    "information_schema.columns WHERE table_schema = 'demo' AND table_name = "
+    "'<table>') and write your query using only the table and column names that "
+    "those results return. The schema summary above is guidance, not a "
+    "substitute for this check. "
     "Temperatures are Kelvin - always show Celsius first, Kelvin in "
     "parentheses, e.g. -8.99 C (264.16 K). "
     "For ANY 'where in Germany' / most-extreme-place question you MUST "
@@ -168,6 +176,15 @@ mcp = FastMCP("german-weather", instructions=INSTRUCTIONS)
 def query_sql(statement: str) -> str:
     """Run a read-only SQL statement against the CrateDB `demo` schema and
     return columns + rows.
+
+    UNDER NO CIRCUMSTANCES query the data before checking the table and column
+    names first. Your first calls for any task must inspect the schema via
+    information_schema (SELECT table_name FROM information_schema.tables WHERE
+    table_schema = 'demo'; then SELECT column_name, data_type FROM
+    information_schema.columns WHERE table_schema = 'demo' AND table_name =
+    '<table>'). Only after you have confirmed the real names from those results
+    may you build SELECTs against the data, and only with names that appear in
+    them.
 
     Beyond weather readings, german_regions carries full-text economics,
     transportation and introduced_species columns - answer questions about a
@@ -218,9 +235,15 @@ A few details make this work against CrateDB:
 - Each request carries a `Default-Schema: demo` header. The `_sql` endpoint is
   stateless, so this header is the durable equivalent of `SET search_path TO
   demo` and lets the assistant use unqualified table names.
-- The `instructions` and the tool description carry the data rules — Kelvin
-  display, the geographic filter, and a default to the latest data — so the
-  assistant applies them without being reminded in every prompt.
+- The `instructions` and the tool description carry the data rules — inspect
+  the schema with `information_schema` before any data query, Kelvin display,
+  the geographic filter, and a default to the latest data — so the assistant
+  applies them without being reminded in every prompt.
+
+Note the schema-check rule in particular: the server tells the assistant to
+confirm the real table and column names via `information_schema` before it
+runs any SELECT against the data, rather than trusting the schema summary in
+the prompt. That keeps queries from failing on guessed column names.
 
 When a question about station locations gives no time range, the assistant
 scopes the query to the most recent readings rather than the whole history:
@@ -279,6 +302,50 @@ the launch command, so the connection flag goes there too:
 
 ```bash
 claude mcp add german-weather -- python /path/to/german_weather_mcp.py --cratedb-url "http://<user>:<password>@<host>:4200/"
+```
+
+#### Configure with `.mcp.json` instead
+
+If you'd rather check the server into a project — so anyone who opens the repo
+in Claude Code gets it automatically — add it to a `.mcp.json` file at the
+project root instead of running `claude mcp add`. The format is the same as the
+Claude Desktop config, under the top-level `mcpServers` key:
+
+```json
+{
+  "mcpServers": {
+    "german-weather": {
+      "command": "python",
+      "args": [
+        "/path/to/german_weather_mcp.py",
+        "--cratedb-url",
+        "http://<user>:<password>@<host>:4200/"
+      ]
+    }
+  }
+}
+```
+
+Claude Code reads `.mcp.json` from the directory it's launched in and prompts
+you to approve project-scoped servers the first time. Because the file is
+committed to the repo, prefer keeping credentials out of it — pass them through
+the environment instead, with `${VAR}` expansion in the value:
+
+```json
+{
+  "mcpServers": {
+    "german-weather": {
+      "command": "python",
+      "args": ["/path/to/german_weather_mcp.py"],
+      "env": {
+        "CRATEDB_HOST": "${CRATEDB_HOST}",
+        "CRATEDB_USER": "${CRATEDB_USER}",
+        "CRATEDB_PASSWORD": "${CRATEDB_PASSWORD}",
+        "CRATEDB_SCHEME": "http"
+      }
+    }
+  }
+}
 ```
 
 For Claude Desktop, add an entry to `claude_desktop_config.json`, passing the

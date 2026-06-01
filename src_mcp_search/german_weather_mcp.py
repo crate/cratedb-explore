@@ -96,6 +96,14 @@ INSTRUCTIONS = (
     "introduced_species - use MATCH() on these to answer questions about a "
     "region's industry (e.g. car factories), transport or wildlife), geo_points "
     "(station locations). "
+    "MANDATORY FIRST STEP: never run a data query without first confirming the "
+    "actual table and column names. Before any SELECT against the data, query "
+    "information_schema (e.g. SELECT table_name FROM information_schema.tables "
+    "WHERE table_schema = 'demo', then SELECT column_name, data_type FROM "
+    "information_schema.columns WHERE table_schema = 'demo' AND table_name = "
+    "'<table>') and write your query using only the table and column names that "
+    "those results return. The schema summary above is guidance, not a "
+    "substitute for this check. "
     "Temperatures are Kelvin - always show Celsius first, Kelvin in "
     "parentheses, e.g. -8.99 C (264.16 K). "
     "For ANY 'where in Germany' / most-extreme-place question you MUST "
@@ -114,6 +122,15 @@ mcp = FastMCP("german-weather", instructions=INSTRUCTIONS)
 def query_sql(statement: str) -> str:
     """Run a read-only SQL statement against the CrateDB `demo` schema and
     return columns + rows.
+
+    UNDER NO CIRCUMSTANCES query the data before checking the table and column
+    names first. Your first calls for any task must inspect the schema via
+    information_schema (SELECT table_name FROM information_schema.tables WHERE
+    table_schema = 'demo'; then SELECT column_name, data_type FROM
+    information_schema.columns WHERE table_schema = 'demo' AND table_name =
+    '<table>'). Only after you have confirmed the real names from those results
+    may you build SELECTs against the data, and only with names that appear in
+    them.
 
     Beyond weather readings, german_regions carries full-text economics,
     transportation and introduced_species columns - answer questions about a
