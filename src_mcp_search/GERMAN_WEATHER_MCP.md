@@ -181,6 +181,8 @@ The latest-data default is not only about correctness; it keeps geospatial
 questions fast. Measured against the demo cluster — a network of 727 stations —
 over the HTTP `_sql` endpoint, the round-trip latencies are:
 
+![query_sql latency by query and percentile, on a log scale: metadata lookups around 3 ms, the latest-data coldest-5 query around 100 ms, and the unscoped stations-per-state query around 7.7 s](../doc/mcp_latency.png)
+
 | Query | p50 | p90 | p99 |
 | --- | --- | --- | --- |
 | Region metadata lookup | 2.5 ms | 3.0 ms | 4.9 ms |
