@@ -1,4 +1,4 @@
-# Query IoT Data in CrateDB With an MCP Server
+# Query IoT data in CrateDB with an MCP server
 
 CrateDB stores high-volume IoT and time-series sensor data and lets you query it
 in real time with SQL. The Model Context Protocol (MCP) takes this a step
@@ -24,7 +24,7 @@ for example — can then discover the tool and use it to answer your questions.
   HTTP port (`4200` by default).
 - An MCP-capable AI assistant, such as Claude Code or Claude Desktop.
 
-## The Dataset
+## The dataset
 
 The demo data lives in the `demo` schema and models a weather sensor network:
 
@@ -35,7 +35,7 @@ The demo data lives in the `demo` schema and models a weather sensor network:
   polygon that describes its boundary.
 - `geo_points` — the weather station locations, with the nearest town for each.
 
-## Step 1 — Install the Dependencies
+## Step 1 — Install the dependencies
 
 Install the MCP Python SDK and an HTTP client:
 
@@ -43,7 +43,7 @@ Install the MCP Python SDK and an HTTP client:
 pip install "mcp[cli]" httpx
 ```
 
-## Step 2 — Create the Server
+## Step 2 — Create the server
 
 Save the following as [`german_weather_mcp.py`](https://github.com/crate/cratedb-explore/blob/main/src_mcp_search/german_weather_mcp.py).
 It connects to CrateDB, then defines a single tool that runs SQL against the
@@ -219,7 +219,7 @@ scopes the query to the most recent readings rather than the whole history:
 WHERE measurement_time = (SELECT MAX(d2.measurement_time) FROM demo.climate_data d2)
 ```
 
-## Step 3 — Register the Server
+## Step 3 — Register the server
 
 For Claude Code, add the server from the command line:
 
@@ -258,7 +258,7 @@ press Ctrl+C to stop it). The CrateDB connection itself isn't tested until the
 first query, so a cluster that's down or unreachable surfaces as an error in
 Step 4 rather than here.
 
-## Step 4 — Ask a Question
+## Step 4 — Ask a question
 
 With the server registered, ask a question in natural language:
 
@@ -272,7 +272,7 @@ cluster, it returns:
 > **-10.41 C (262.74 K)**, at `[12.75, 50.5]` in the Vogtland area of Saxony,
 > near the Czech border.
 
-## Filtering by Geography
+## Filtering by geography
 
 One rule is worth calling out, because it is easy to get wrong. The
 `geo_points` table includes a handful of towns just across the border — for
@@ -320,7 +320,7 @@ query. Scoping `climate_data` to the latest snapshot before that join, as the
 server's instructions ask, keeps the coldest-stations question near 100 ms —
 roughly 80 times faster than the unscoped polygon scan in the bottom row.
 
-## Next Steps
+## Next steps
 
 - Read the [CrateDB MCP documentation](https://cratedb.com/docs/guide/integrate/mcp/cratedb-mcp.html)
   for the full picture, including documentation retrieval.
