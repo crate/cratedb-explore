@@ -114,3 +114,20 @@ WHERE measurement_time = (SELECT MAX(d2.measurement_time) FROM demo.climate_data
 
 This keeps "where is it coldest right now?"-style questions fast and scoped to
 the latest snapshot.
+
+## Query latencies
+
+Measured against the demo cluster (a 727-station network) over the HTTP `_sql`
+endpoint — the same request the `query_sql` tool makes. One warm-up call is
+discarded per query; MCP/stdio overhead is negligible next to these.
+
+| Query | p50 | p90 | p99 | rows |
+|---|---:|---:|---:|---:|
+| metadata (`region_name` list) | 2.5 ms | 3.0 ms | 4.9 ms | 16 |
+| latest-data coldest-5 (`WITHIN` + `MAX` subquery) | 97 ms | 102 ms | 107 ms | 5 |
+| `WITHIN` stations-per-state (no time filter) | 7.65 s | 7.72 s | 7.76 s | 15 |
+
+The point-in-polygon `WITHIN` join is the expensive operation. Scoping
+`climate_data` to the latest snapshot first (the rule above) is what keeps the
+coldest-5 query at ~100 ms instead of seconds — roughly 75× faster than the
+unscoped polygon scan in the bottom row.
