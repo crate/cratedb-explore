@@ -240,7 +240,7 @@ to be running CrateDB locally with the default user, **you must supply
 connection parameters**. The simplest is a single URL:
 
 ```bash
---cratedb-url "https://<user>:<password>@<host>:4200/"
+--cratedb-url "http://<user>:<password>@<host>:4200/"
 ```
 
 or set the equivalent pieces as environment variables before launching:
@@ -249,7 +249,7 @@ or set the equivalent pieces as environment variables before launching:
 export CRATEDB_HOST=<host>
 export CRATEDB_USER=<user>
 export CRATEDB_PASSWORD=<password>
-export CRATEDB_SCHEME=https        # http for a plain local cluster
+export CRATEDB_SCHEME=http          # https only if your cluster terminates TLS
 ```
 
 Every command below shows the URL flag; drop it only if your cluster really is
@@ -262,7 +262,7 @@ client normally launches the server for you over stdio, but running it by hand
 confirms `python` can import `mcp`/`httpx` and find the file:
 
 ```bash
-python /path/to/german_weather_mcp.py --cratedb-url "https://<user>:<password>@<host>:4200/"
+python /path/to/german_weather_mcp.py --cratedb-url "http://<user>:<password>@<host>:4200/"
 ```
 
 It should start and then wait silently for input on stdin (it's a stdio server
@@ -278,7 +278,7 @@ For Claude Code, add the server from the command line — everything after `--` 
 the launch command, so the connection flag goes there too:
 
 ```bash
-claude mcp add german-weather -- python /path/to/german_weather_mcp.py --cratedb-url "https://<user>:<password>@<host>:4200/"
+claude mcp add german-weather -- python /path/to/german_weather_mcp.py --cratedb-url "http://<user>:<password>@<host>:4200/"
 ```
 
 For Claude Desktop, add an entry to `claude_desktop_config.json`, passing the
@@ -293,7 +293,7 @@ block instead):
       "args": [
         "/path/to/german_weather_mcp.py",
         "--cratedb-url",
-        "https://<user>:<password>@<host>:4200/"
+        "http://<user>:<password>@<host>:4200/"
       ]
     }
   }
