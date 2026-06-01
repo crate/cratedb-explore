@@ -371,6 +371,11 @@ query. Scoping `climate_data` to the latest snapshot before that join, as the
 server's instructions ask, keeps the coldest-stations question near 100 ms —
 roughly 80 times faster than the unscoped polygon scan in the bottom row.
 
+## Quirks
+
+As of the time of writing Claude (4.8) is mistaking invalid column names 
+for '404' errors, but then continuing.
+
 ## Next steps
 
 - Read the [CrateDB MCP documentation](https://cratedb.com/docs/guide/integrate/mcp/cratedb-mcp.html)
