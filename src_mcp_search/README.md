@@ -26,17 +26,17 @@ pip install -r requirements.txt
 
 ## Connection
 
-Defaults to the demo cluster `scott/tiger@10.13.1.19:4200`, so it runs with no
+Defaults to a local cluster `crate@localhost:4200`, so it runs with no
 arguments. Override with CLI flags or the matching `CRATEDB_*` environment
 variables — flags win.
 
 | Flag | Env var | Default |
 |---|---|---|
 | `--cratedb-url` | `CRATEDB_CLUSTER_URL` | — (overrides the parts below) |
-| `--cratedb-host` | `CRATEDB_HOST` | `10.13.1.19` |
+| `--cratedb-host` | `CRATEDB_HOST` | `localhost` |
 | `--cratedb-port` | `CRATEDB_PORT` | `4200` |
-| `--cratedb-user` | `CRATEDB_USER` | `scott` |
-| `--cratedb-password` | `CRATEDB_PASSWORD` | `tiger` |
+| `--cratedb-user` | `CRATEDB_USER` | `crate` |
+| `--cratedb-password` | `CRATEDB_PASSWORD` | `a_password` |
 | `--cratedb-scheme` | `CRATEDB_SCHEME` | `http` |
 
 ## Try it with the MCP Inspector
@@ -59,7 +59,7 @@ such as `SELECT region_name FROM german_regions ORDER BY 1`.
 claude mcp add german-weather -- python /abs/path/to/src_mcp_search/german_weather_mcp.py
 ```
 
-Pass connection flags after the script if you are not using the demo cluster:
+Pass connection flags after the script if you are not using the defaults:
 
 ```bash
 claude mcp add german-weather -- python /abs/path/german_weather_mcp.py \

@@ -10,7 +10,7 @@ with WITHIN(...), because demo.geo_points holds near-border foreign towns. That
 rule is stated in both the tool description and the server `instructions` so the
 connecting model applies it.
 
-Connection defaults to the demo cluster (scott/tiger@10.13.1.19:4200) and can be
+Connection defaults to a local cluster (crate@localhost:4200) and can be
 overridden with --cratedb-url / --cratedb-host / ... flags or the matching
 CRATEDB_* environment variables (flags win).
 """
@@ -22,12 +22,12 @@ from urllib.parse import urlparse
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-# Demo-cluster fallbacks so the server runs with no arguments.
+# Fallbacks so the server runs with no arguments.
 DEFAULTS = {
-    "host": "10.13.1.19",
+    "host": "localhost",
     "port": "4200",
-    "user": "scott",
-    "password": "tiger",
+    "user": "crate",
+    "password": "a_password",
     "scheme": "http",
 }
 
@@ -53,7 +53,7 @@ def resolve_endpoint(args: argparse.Namespace) -> tuple[str, tuple[str, str]]:
     Either a full --cratedb-url / CRATEDB_CLUSTER_URL is supplied, or the
     pieces are assembled from --cratedb-host / CRATEDB_HOST and friends.
     CLI flags win over environment variables, and anything still missing
-    falls back to the demo cluster so the example runs out of the box.
+    falls back to a local cluster so the example runs out of the box.
     """
     url = args.cratedb_url or os.environ.get("CRATEDB_CLUSTER_URL")
     if url:

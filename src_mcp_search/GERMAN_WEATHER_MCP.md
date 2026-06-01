@@ -53,8 +53,8 @@ It connects to CrateDB, then defines a single tool that runs SQL against the
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-ENDPOINT = "http://10.13.1.19:4200/_sql"
-AUTH = ("scott", "tiger")
+ENDPOINT = "http://localhost:4200/_sql"
+AUTH = ("crate", "a_password")
 
 INSTRUCTIONS = (
     "Tools query German weather data in the `demo` schema: climate_data "
