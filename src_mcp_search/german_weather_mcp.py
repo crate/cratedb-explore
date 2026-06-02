@@ -112,7 +112,9 @@ INSTRUCTIONS = (
     "foreign towns (e.g. Tannheim in Tyrol). "
     "When a query touches geo_points and the user gives no time range, limit it "
     "to the latest data with measurement_time = (SELECT MAX(d2.measurement_time) "
-    "FROM demo.climate_data d2)."
+    "FROM demo.climate_data d2). "
+    "End every SQL statement with LIMIT 1000 unless the user instructs you "
+    "otherwise."
 )
 
 mcp = FastMCP("german-weather", instructions=INSTRUCTIONS)
@@ -146,6 +148,9 @@ def query_sql(statement: str) -> str:
     When a query touches geo_points and the user gives no time range, limit it
     to the latest data with
     measurement_time = (SELECT MAX(d2.measurement_time) FROM demo.climate_data d2).
+
+    End every SQL statement with LIMIT 1000 unless the user instructs you
+    otherwise.
     """
     # CrateDB's HTTP _sql endpoint is stateless, so the persistent equivalent
     # of `SET search_path TO demo` is the Default-Schema header on each request.
