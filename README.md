@@ -106,7 +106,10 @@ Notes:
   afterwards if you want to query the rows immediately.
 
 This is the database-side counterpart to [`src_stream_load/`](src_stream_load/README.md),
-which streams the very same files into Kafka instead.
+which moves the very same files through Kafka instead: a producer
+(`stream_load_into_kafka.py`) streams them from S3 into Kafka as JSON, Avro, or
+Protobuf, and a consumer (`stream_from_kafka_into_crate.py`) reads them back out
+of Kafka and loads them into CrateDB.
 
 ## MCP Search (Claude + CrateDB)
 
