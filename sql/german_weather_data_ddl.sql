@@ -21,6 +21,8 @@
 CREATE TABLE IF NOT EXISTS demo.climate_data (
    measurement_time TIMESTAMP WITHOUT TIME ZONE,
    geo_location GEO_POINT,
+   latitude  DOUBLE PRECISION GENERATED ALWAYS AS LATITUDE(geo_location),
+   longitude DOUBLE PRECISION GENERATED ALWAYS AS LONGITUDE(geo_location),
    data OBJECT(DYNAMIC) AS (
       temperature DOUBLE PRECISION,
       pressure DOUBLE PRECISION,
@@ -28,7 +30,8 @@ CREATE TABLE IF NOT EXISTS demo.climate_data (
       v10 DOUBLE PRECISION,
       latitude DOUBLE PRECISION,
       longitude DOUBLE PRECISION
-   )
+   ),
+   PRIMARY KEY (measurement_time, latitude, longitude)
 );
 
 CREATE TABLE IF NOT EXISTS demo.german_regions (
