@@ -25,7 +25,7 @@ use a Confluent Schema Registry. The destination is hidden behind the
 in later.
 
 Usage:
-    python stream_load.py [options]
+    python stream_load_into_kafka.py [options]
 
     --format {json,avro,protobuf}   Value encoding (default: json).
     --bootstrap-servers HOST:PORT   Kafka brokers (default: localhost:9092;
@@ -41,8 +41,8 @@ Usage:
     --climate-data-url URL          Override the climate_data source URL.
 
 Examples:
-    python stream_load.py --format json --climate-limit 1000 --climate-rate 200
-    python stream_load.py --format avro --bootstrap-servers broker:9092 \
+    python stream_load_into_kafka.py --format json --climate-limit 1000 --climate-rate 200
+    python stream_load_into_kafka.py --format avro --bootstrap-servers broker:9092 \
         --schema-registry-url http://registry:8081
 
 Exit codes:
@@ -135,7 +135,7 @@ def load_topic(spec, url, topic, value_serializer, key_serializer, sink,
 
 def parse_args(argv):
     p = argparse.ArgumentParser(
-        prog="stream_load.py",
+        prog="stream_load_into_kafka.py",
         description="Stream the demo JSON datasets into Kafka (JSON/Avro/Protobuf).",
     )
     p.add_argument("--format", choices=serializers.FORMATS, default="json")

@@ -1,8 +1,13 @@
-# src_stream_load — stream the demo datasets into Kafka
+# src_stream_load — stream the demo datasets through Kafka
 
-A Python producer that reads the three demo JSON files from S3 and streams them
-into Kafka, encoded as **JSON, Avro, or Protobuf**. Avro and Protobuf register
-their schemas with a Confluent **Schema Registry**.
+Two Python programs that move the demo datasets through Kafka:
+
+- **`stream_load_into_kafka.py`** — the producer. Reads the three demo JSON files
+  from S3 and streams them into Kafka, encoded as **JSON, Avro, or Protobuf**
+  (Avro and Protobuf register their schemas with a Confluent **Schema Registry**).
+- **`stream_from_kafka_into_crate.py`** — the consumer. Reads those same topics
+  back out of Kafka, deserializes them, and bulk-loads them into **CrateDB** over
+  its HTTP `_sql` endpoint, creating the tables first if they don't exist.
 
 ## The data
 
@@ -77,7 +82,7 @@ the two keyed reference topics.
 The destination is isolated behind the `StreamSink` interface in `sinks.py`
 (`send` / `flush` / `close`), which only ever sees pre-serialized bytes.
 `KafkaSink` is the one implementation today; to target Pulsar, Kinesis, etc.,
-implement `StreamSink` and construct it in `stream_load.py` — the read,
+implement `StreamSink` and construct it in `stream_load_into_kafka.py` — the read,
 serialize, and rate-limit loop is unchanged.
 
 ## Install and run
@@ -88,10 +93,10 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # JSON — no Schema Registry needed; smoke test with a small climate cap:
-python stream_load.py --format json --climate-limit 1000 --climate-rate 200
+python stream_load_into_kafka.py --format json --climate-limit 1000 --climate-rate 200
 
 # Avro / Protobuf — against Kafka + a Schema Registry:
-python stream_load.py --format avro \
+python stream_load_into_kafka.py --format avro \
     --bootstrap-servers localhost:9092 \
     --schema-registry-url http://localhost:8081
 ```
@@ -114,7 +119,54 @@ docker-compose) is the simplest way to exercise the binary formats.
 Exit codes: `0` success · `1` bad argument · `2` source download failed ·
 `3` one or more records failed to deliver.
 
-## Consuming
+## Loading Kafka into CrateDB
+
+`stream_from_kafka_into_crate.py` is the read side: it consumes the three topics
+and bulk-inserts them into `demo.geo_points`, `demo.german_regions`, and
+`demo.climate_data` over CrateDB's HTTP `_sql` endpoint. It mirrors the
+producer's CLI — the same `--format`, `--bootstrap-servers`,
+`--schema-registry-url`, and `--topic-prefix` choose what to read — and applies
+the same load order (reference tables in full first, then the `climate_data`
+fact stream).
+
+```bash
+cd src_stream_load && source .venv/bin/activate
+
+# Read the JSON topics into a local CrateDB:
+python stream_from_kafka_into_crate.py --format json \
+    --bootstrap-servers localhost:9092 --cratedb-url http://localhost:4200
+
+# Read the Avro topics (note the matching --topic-prefix), tailing for new data:
+python stream_from_kafka_into_crate.py --format avro --topic-prefix avro_ \
+    --bootstrap-servers localhost:9092 --schema-registry-url http://localhost:8081 \
+    --cratedb-url http://localhost:4200 --follow
+```
+
+Behaviour worth knowing:
+
+- **It creates the tables if they're missing.** On startup it checks
+  `information_schema` and, for any absent demo table, runs the matching
+  statement from `../sql/german_weather_data_ddl.sql`, printing the DDL as it
+  goes. `climate_data`'s `latitude`/`longitude` are GENERATED from
+  `geo_location`, so the loader inserts only `measurement_time`, `geo_location`,
+  and `data` and lets CrateDB compute the rest.
+- **`--follow` tails `climate_data`.** Without it the consumer stops once it has
+  drained every record currently in the topic. With it, the reference tables
+  still finish and stop, but `climate_data` keeps consuming and inserting new
+  readings until you Ctrl-C.
+- **Re-runs are idempotent.** Inserts are plain `INSERT`s; CrateDB's primary
+  keys reject duplicates per-row (reported as *skipped*, not *inserted*), so
+  re-reading a topic never doubles the data. Offsets are committed after each
+  batch, so the consumer also resumes from where it left off.
+- **Credentials come from the environment.** Set `CRATE_USER` / `CRATE_PASSWORD`
+  (HTTP basic auth); the endpoint itself is `--cratedb-url` (env `CRATEDB_URL`,
+  default `http://localhost:4200`). Exit codes: `0` success · `1` bad argument ·
+  `2` CrateDB unreachable or rejected a statement.
+
+This is the Kafka-fed counterpart to loading CrateDB straight from S3 with
+[`COPY FROM`](../README.md#loading-the-data-with-copy-from).
+
+## Consuming a topic yourself
 
 Message keys are UTF-8 strings in every format; only the value decoding differs.
 The snippets below read the `geo_points` topic — swap the topic name for
