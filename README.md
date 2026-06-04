@@ -93,6 +93,15 @@ Notes:
   and the ISO-8601 `measurement_time` string → `TIMESTAMP`.
 - **`RETURN SUMMARY`** reports per-node success/error counts so you can confirm
   all rows landed (726 geo points, 16 regions, and the full climate stream).
+- **Reloads are idempotent, not additive.** All three tables have primary keys
+  (`geo_points` on `(latitude, longitude)`, `german_regions` on `region_name`,
+  and `climate_data` on `(measurement_time, latitude, longitude)` via generated
+  columns — `geo_point` itself can't be a key). `COPY FROM` does not upsert, so
+  re-running it on an already-loaded table reports every existing row as a
+  duplicate-key conflict in `RETURN SUMMARY` (the `error_count`) and keeps the
+  current row — it won't silently double the data. To refresh a table from
+  scratch, `DELETE`/`DROP` it first; to merge updates, use
+  `INSERT … ON CONFLICT DO UPDATE` instead of `COPY FROM`.
 - Run `REFRESH TABLE demo.geo_points, demo.german_regions, demo.climate_data;`
   afterwards if you want to query the rows immediately.
 
