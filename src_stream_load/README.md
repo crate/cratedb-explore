@@ -1,6 +1,7 @@
 # src_stream_load — stream the demo datasets through Kafka
 
-Two Python programs that move the demo datasets through Kafka:
+We have two Python programs that write the demo dataset into Kafka, and then load it from Kafka
+into CrateDB:
 
 - **`stream_load_into_kafka.py`** — the producer. Reads the three demo JSON files
   from S3 and streams them into Kafka, encoded as **JSON, Avro, or Protobuf**
@@ -79,7 +80,7 @@ the two keyed reference topics.
 
 ## Targeting a different streaming platform
 
-The destination is isolated behind the `StreamSink` interface in `sinks.py`
+The destination is isolated behind the `StreamSink` interface (that we wrote) in `sinks.py`
 (`send` / `flush` / `close`), which only ever sees pre-serialized bytes.
 `KafkaSink` is the one implementation today; to target Pulsar, Kinesis, etc.,
 implement `StreamSink` and construct it in `stream_load_into_kafka.py` — the read,
@@ -93,7 +94,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # JSON — no Schema Registry needed; smoke test with a small climate cap:
-python stream_load_into_kafka.py --format json --climate-limit 1000 --climate-rate 200
+python stream_load_into_kafka.py --bootstrap-servers localhost:9092  --format json --climate-limit 1000 --climate-rate 200
 
 # Avro / Protobuf — against Kafka + a Schema Registry:
 python stream_load_into_kafka.py --format avro \
@@ -167,6 +168,54 @@ This is the Kafka-fed counterpart to loading CrateDB straight from S3 with
 [`COPY FROM`](../README.md#loading-the-data-with-copy-from).
 
 ## Consuming a topic yourself
+
+### First create your tables..
+
+Before you start you'll need to created the tables in Crate. See [german_weather_data_ddl.sql](../sql/german_weather_data_ddl.sql). Note that there 
+is also '[german_weather_data_dynamic_ddl.sql](../sql/german_weather_data_dynamic_ddl.sql)', which creates columns from weather data as and when they
+are first seen. So while the '[offical](../sql/german_weather_data_ddl.sql)' DDL file has:
+
+```sql
+data OBJECT(DYNAMIC) AS (
+      temperature DOUBLE PRECISION,
+      pressure DOUBLE PRECISION,
+      u10 DOUBLE PRECISION,
+      v10 DOUBLE PRECISION,
+      latitude DOUBLE PRECISION,
+      longitude DOUBLE PRECISION
+   ),
+   ```
+'[german_weather_data_dynamic_ddl.sql](../sql/german_weather_data_dynamic_ddl.sql)' has:
+
+```sql
+data OBJECT(DYNAMIC),
+```
+'DYNAMIC' means that as previously unknown columns are encountered, CrateDB [adds them to the table](https://cratedb.com/blog/handling-dynamic-objects-in-cratedb). 
+This means if I am trying to load a 130 column table I don't need to 
+add all 130 columns to the DDL by hand - I can name the important ones, and use DYNAMIC to find the rest.
+Once the data is loaded I can see the actual schema with:
+
+```sql
+SHOW CREATE TABLE demo.climate_data;
+```
+
+### Loading the data..
+
+If all you want is the topics loaded into CrateDB, use the ready-made consumer —
+[`stream_from_kafka_into_crate.py`](stream_from_kafka_into_crate.py) — described
+under [Loading Kafka into CrateDB](#loading-kafka-into-cratedb) above. It already
+decodes every format, creates the tables, and bulk-inserts the rows, e.g.:
+
+```bash
+cd src_stream_load && source .venv/bin/activate
+python stream_from_kafka_into_crate.py --format json \
+    --bootstrap-servers localhost:9092 --cratedb-url http://localhost:4200
+```
+
+The rest of this section is for when you want to read a topic into your *own*
+application instead of into CrateDB — for that, see how
+[`stream_from_kafka_into_crate.py`](stream_from_kafka_into_crate.py) decodes each
+format and adapt the snippets below.
 
 Message keys are UTF-8 strings in every format; only the value decoding differs.
 The snippets below read the `geo_points` topic — swap the topic name for
