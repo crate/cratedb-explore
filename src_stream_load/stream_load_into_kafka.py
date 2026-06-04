@@ -15,40 +15,46 @@
 # limitations under the License.
 
 """
-Stream the three demo JSON datasets into Kafka.
+Stream the demo climate_data dataset into Kafka, split by latitude.
 
-The two small reference tables (german_regions, geo_points) are streamed first
-and in full; the large climate_data fact stream is streamed last and may be
-rate-limited. Records are encoded as JSON, Avro, or Protobuf; Avro and Protobuf
-use a Confluent Schema Registry. The destination is hidden behind the
-``StreamSink`` interface (see sinks.py) so a non-Kafka platform can be dropped
-in later.
+Every record is routed to one of three latitude **bands**, each shipped in a
+different wire format (so a single run exercises all three encodings):
+
+    northern band  -> Avro      (topic climate_data_north)
+    central band   -> JSON      (topic climate_data_central)
+    southern band  -> Protobuf  (topic climate_data_south)
+
+The Avro and Protobuf bands register their schemas with a Confluent Schema
+Registry, so one is always required. The whole stream honours --climate-rate
+and --climate-limit. The destination is hidden behind the ``StreamSink``
+interface (see sinks.py) so a non-Kafka platform can be dropped in later.
 
 Usage:
     python stream_load_into_kafka.py [options]
 
-    --format {json,avro,protobuf}   Value encoding (default: json).
     --bootstrap-servers HOST:PORT   Kafka brokers (default: localhost:9092;
                                     env KAFKA_BOOTSTRAP_SERVERS).
-    --schema-registry-url URL       Required for avro/protobuf (default:
+    --schema-registry-url URL       Confluent Schema Registry, used by the Avro
+                                    and Protobuf bands (default:
                                     http://localhost:8081; env SCHEMA_REGISTRY_URL).
-    --climate-rate N                Max climate_data records/sec, 0 = unlimited
-                                    (default: 0). Does not affect the reference tables.
-    --climate-limit N               Cap climate_data records (0 = all; default: 0).
+    --climate-rate N                Max records/sec, 0 = unlimited (default: 0).
+    --climate-limit N               Cap total records (0 = all; default: 0).
+    --south-max-lat L               Latitudes below L go south  (default: 50.0).
+    --north-min-lat L               Latitudes >= L go north     (default: 52.0).
     --topic-prefix PREFIX           Prepended to every topic name (default: none).
-    --geo-points-url URL            Override the geo_points source URL.
-    --german-regions-url URL        Override the german_regions source URL.
-    --climate-data-url URL          Override the climate_data source URL.
+    --source-url URL                Override the climate_data source URL.
 
 Examples:
-    python stream_load_into_kafka.py --format json --climate-limit 1000 --climate-rate 200
-    python stream_load_into_kafka.py --format avro --bootstrap-servers broker:9092 \
+    # Smoke test against a local broker + registry with a small cap:
+    python stream_load_into_kafka.py --climate-limit 3000 --climate-rate 500
+    # Against named hosts:
+    python stream_load_into_kafka.py --bootstrap-servers broker:9092 \
         --schema-registry-url http://registry:8081
 
 Exit codes:
     0 — success
     1 — bad command-line argument
-    2 — a source download failed
+    2 — the source download failed
     3 — one or more records failed to deliver to the sink
 """
 
@@ -61,21 +67,24 @@ import time
 import requests
 
 import serializers
-from serializers import CLIMATE_DATA, GEO_POINTS, GERMAN_REGIONS
+from serializers import (
+    BANDS,
+    DEFAULT_NORTH_MIN_LAT,
+    DEFAULT_SOUTH_MAX_LAT,
+    band_for_latitude,
+    climate_key,
+    latitude_of,
+)
 from sinks import KafkaSink
 
 S3_BASE = "https://guided-path.s3.us-east-1.amazonaws.com"
-DEFAULT_URLS = {
-    GEO_POINTS.name: f"{S3_BASE}/geo_points.json",
-    GERMAN_REGIONS.name: f"{S3_BASE}/german_regions.json",
-    CLIMATE_DATA.name: f"{S3_BASE}/export-demo_climate_data_large_v2.json",
-}
+DEFAULT_SOURCE_URL = f"{S3_BASE}/export-demo_climate_data_large_v2.json"
 
 EXIT_BAD_ARG = 1
 EXIT_DOWNLOAD = 2
 EXIT_DELIVERY = 3
 
-# Report progress on the big stream every this-many records.
+# Report progress every this-many records.
 _PROGRESS_EVERY = 50_000
 
 
@@ -111,34 +120,12 @@ def iter_ndjson(url: str):
                 yield json.loads(line)
 
 
-def load_topic(spec, url, topic, value_serializer, key_serializer, sink,
-               rate=0.0, limit=0) -> int:
-    """Stream one dataset to its topic. Returns the number of records sent."""
-    limiter = RateLimiter(rate)
-    sent = 0
-    print(f"  {topic}: streaming from {url}")
-    for rec in iter_ndjson(url):
-        limiter.wait()
-        sink.send(
-            topic,
-            key=key_serializer(spec.key_of(rec)),
-            value=value_serializer(rec),
-        )
-        sent += 1
-        if sent % _PROGRESS_EVERY == 0:
-            print(f"  {topic}: {sent:,} records sent")
-        if limit and sent >= limit:
-            break
-    print(f"  {topic}: done ({sent:,} records)")
-    return sent
-
-
 def parse_args(argv):
     p = argparse.ArgumentParser(
         prog="stream_load_into_kafka.py",
-        description="Stream the demo JSON datasets into Kafka (JSON/Avro/Protobuf).",
+        description="Stream demo climate_data into Kafka, split by latitude into "
+                    "Avro (north) / JSON (central) / Protobuf (south) bands.",
     )
-    p.add_argument("--format", choices=serializers.FORMATS, default="json")
     p.add_argument(
         "--bootstrap-servers",
         default=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
@@ -148,70 +135,73 @@ def parse_args(argv):
         default=os.environ.get("SCHEMA_REGISTRY_URL", "http://localhost:8081"),
     )
     p.add_argument("--climate-rate", type=float, default=0.0,
-                   help="Max climate_data records/sec (0 = unlimited).")
+                   help="Max records/sec (0 = unlimited).")
     p.add_argument("--climate-limit", type=int, default=0,
-                   help="Cap climate_data records (0 = all).")
+                   help="Cap total records (0 = all).")
+    p.add_argument("--south-max-lat", type=float, default=DEFAULT_SOUTH_MAX_LAT,
+                   help="Latitudes below this go to the southern band.")
+    p.add_argument("--north-min-lat", type=float, default=DEFAULT_NORTH_MIN_LAT,
+                   help="Latitudes at or above this go to the northern band.")
     p.add_argument("--topic-prefix", default="")
-    p.add_argument("--geo-points-url", default=DEFAULT_URLS[GEO_POINTS.name])
-    p.add_argument("--german-regions-url", default=DEFAULT_URLS[GERMAN_REGIONS.name])
-    p.add_argument("--climate-data-url", default=DEFAULT_URLS[CLIMATE_DATA.name])
+    p.add_argument("--source-url", default=DEFAULT_SOURCE_URL)
 
     args = p.parse_args(argv)
     if args.climate_rate < 0:
         p.error("--climate-rate must be >= 0")
     if args.climate_limit < 0:
         p.error("--climate-limit must be >= 0")
+    if args.south_max_lat > args.north_min_lat:
+        p.error("--south-max-lat must be <= --north-min-lat")
     return args
 
 
 def main(argv=None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
 
-    # The Schema Registry is only needed for the binary encodings.
-    sr_client = None
-    if args.format != "json":
-        from confluent_kafka.schema_registry import SchemaRegistryClient
+    from confluent_kafka.schema_registry import SchemaRegistryClient
 
-        sr_client = SchemaRegistryClient({"url": args.schema_registry_url})
-
+    sr_client = SchemaRegistryClient({"url": args.schema_registry_url})
     key_ser = serializers.key_serializer()
 
-    def topic_name(spec):
-        return f"{args.topic_prefix}{spec.name}"
-
-    # Pre-build a value serializer per topic (binds the schema once).
+    # Pre-build one value serializer + topic name per band (binds each schema once).
+    topics = {b.name: f"{args.topic_prefix}{b.topic}" for b in BANDS}
     value_sers = {
-        spec.name: serializers.build_value_serializer(
-            args.format, spec, topic_name(spec), sr_client
-        )
-        for spec in (GEO_POINTS, GERMAN_REGIONS, CLIMATE_DATA)
+        b.name: serializers.build_value_serializer(b.fmt, topics[b.name], sr_client)
+        for b in BANDS
     }
 
     print(
-        f"Loading demo data into Kafka at {args.bootstrap_servers} "
-        f"as {args.format}"
-        + (f" (registry {args.schema_registry_url})" if sr_client else "")
+        f"Loading climate_data into Kafka at {args.bootstrap_servers} "
+        f"(registry {args.schema_registry_url})\n"
+        f"  bands: "
+        + ", ".join(f"{b.name}={topics[b.name]} [{b.fmt}]" for b in BANDS)
+        + f"\n  cuts:  lat < {args.south_max_lat} south, "
+          f"{args.south_max_lat} <= central < {args.north_min_lat}, "
+          f"north >= {args.north_min_lat}"
     )
 
-    counts = {}
+    counts = {b.name: 0 for b in BANDS}
+    limiter = RateLimiter(args.climate_rate)
+    total = 0
+    print(f"  streaming from {args.source_url}")
     try:
         with KafkaSink(args.bootstrap_servers) as sink:
-            # 1 & 2: reference tables first, in full, at full speed.
-            for spec, url in (
-                (GERMAN_REGIONS, args.german_regions_url),
-                (GEO_POINTS, args.geo_points_url),
-            ):
-                counts[spec.name] = load_topic(
-                    spec, url, topic_name(spec),
-                    value_sers[spec.name], key_ser, sink,
+            for rec in iter_ndjson(args.source_url):
+                limiter.wait()
+                band = band_for_latitude(
+                    latitude_of(rec), args.south_max_lat, args.north_min_lat
                 )
-
-            # 3: the large fact stream last, optionally rate-limited / capped.
-            counts[CLIMATE_DATA.name] = load_topic(
-                CLIMATE_DATA, args.climate_data_url, topic_name(CLIMATE_DATA),
-                value_sers[CLIMATE_DATA.name], key_ser, sink,
-                rate=args.climate_rate, limit=args.climate_limit,
-            )
+                sink.send(
+                    topics[band.name],
+                    key=key_ser(climate_key(rec)),
+                    value=value_sers[band.name](rec),
+                )
+                counts[band.name] += 1
+                total += 1
+                if total % _PROGRESS_EVERY == 0:
+                    print(f"  {total:,} records sent")
+                if args.climate_limit and total >= args.climate_limit:
+                    break
 
             print("Flushing...")
             sink.flush()
@@ -220,7 +210,6 @@ def main(argv=None) -> int:
         print(f"ERROR: source download failed: {exc}", file=sys.stderr)
         return EXIT_DOWNLOAD
 
-    total = sum(counts.values())
     print(
         "Done. "
         + ", ".join(f"{name}={n:,}" for name, n in counts.items())

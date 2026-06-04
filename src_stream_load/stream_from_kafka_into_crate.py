@@ -15,21 +15,22 @@
 # limitations under the License.
 
 """
-Consume the three demo datasets back out of Kafka and load them into CrateDB.
+Consume the three climate_data latitude bands from Kafka into CrateDB.
 
-This is the read side of ``stream_load_into_kafka.py`` and mirrors its CLI:
-the same ``--format`` (JSON / Avro / Protobuf), ``--bootstrap-servers``,
-``--schema-registry-url``, and ``--topic-prefix`` select what to read. Records
-are deserialized (Avro/Protobuf via the Schema Registry) and bulk-inserted into
-``demo.geo_points``, ``demo.german_regions``, and ``demo.climate_data`` over
-CrateDB's HTTP ``_sql`` endpoint.
+This is the read side of ``stream_load_into_kafka.py``. It consumes all three
+band topics — each in its own wire format —
 
-Like the producer, the two small reference tables (german_regions, geo_points)
-are drained first and in full; the large climate_data fact stream is drained
-last. With ``--follow`` the consumer does not stop at the end of climate_data —
-it keeps running and inserts new readings as they arrive (Ctrl-C to stop).
+    climate_data_north    Avro
+    climate_data_central  JSON
+    climate_data_south    Protobuf
 
-If any of the three demo tables is missing it is created first from
+and bulk-inserts every record into the single ``demo.climate_data`` table over
+CrateDB's HTTP ``_sql`` endpoint. Avro and Protobuf are decoded via a Confluent
+Schema Registry, so one is always required.
+
+The consumer drains whatever is currently in the band topics and stops. With
+``--follow`` it keeps running and inserts new readings as they arrive (Ctrl-C to
+stop). If ``demo.climate_data`` is missing it is created first from
 ``sql/german_weather_data_ddl.sql``, and the DDL is printed as it runs.
 
 CrateDB credentials are read from the CRATE_USER / CRATE_PASSWORD environment
@@ -38,26 +39,26 @@ variables (never the command line), matching the other tools in this repo.
 Usage:
     python stream_from_kafka_into_crate.py [options]
 
-    --format {json,avro,protobuf}   Value encoding (default: json).
     --bootstrap-servers HOST:PORT   Kafka brokers (default: localhost:9092;
                                     env KAFKA_BOOTSTRAP_SERVERS).
-    --schema-registry-url URL       Required for avro/protobuf (default:
+    --schema-registry-url URL       Confluent Schema Registry, used by the Avro
+                                    and Protobuf bands (default:
                                     http://localhost:8081; env SCHEMA_REGISTRY_URL).
     --topic-prefix PREFIX           Prepended to every topic name (default: none).
     --cratedb-url URL               CrateDB HTTP endpoint (default:
                                     http://localhost:4200; env CRATEDB_URL).
     --group-id ID                   Kafka consumer group (default: crate-loader).
     --batch-size N                  Rows per CrateDB bulk insert (default: 1000).
-    --climate-limit N               Cap climate_data records (0 = all; default: 0).
-    --follow                        After draining climate_data, keep consuming
-                                    and inserting new readings until interrupted.
-    --ddl-file PATH                 DDL used to create missing tables (default:
-                                    ../sql/german_weather_data_ddl.sql).
+    --climate-limit N               Cap total records (0 = all; default: 0).
+    --follow                        After draining the bands, keep consuming and
+                                    inserting new readings until interrupted.
+    --ddl-file PATH                 DDL used to create climate_data if missing
+                                    (default: ../sql/german_weather_data_ddl.sql).
 
 Examples:
-    python stream_from_kafka_into_crate.py --format json --cratedb-url http://localhost:4200
-    python stream_from_kafka_into_crate.py --format avro --topic-prefix avro_ \
-        --bootstrap-servers broker:9092 --schema-registry-url http://registry:8081 --follow
+    python stream_from_kafka_into_crate.py --cratedb-url http://localhost:4200
+    python stream_from_kafka_into_crate.py --bootstrap-servers broker:9092 \
+        --schema-registry-url http://registry:8081 --follow
 
 Exit codes:
     0 — success
@@ -66,7 +67,6 @@ Exit codes:
 """
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -74,9 +74,12 @@ from pathlib import Path
 
 import requests
 
-from serializers import CLIMATE_DATA, GEO_POINTS, GERMAN_REGIONS
+import serializers
+from serializers import BANDS
 
 DEFAULT_DDL = Path(__file__).resolve().parent.parent / "sql" / "german_weather_data_ddl.sql"
+
+CLIMATE_TABLE = "climate_data"
 
 EXIT_BAD_ARG = 1
 EXIT_CRATE = 2
@@ -145,59 +148,40 @@ def _parse_ddl(path: Path):
     return pairs
 
 
-def ensure_tables(crate: CrateClient, ddl_path: Path) -> None:
-    """Create any missing demo table from the DDL file, printing what it runs."""
-    needed = [CLIMATE_DATA.name, GERMAN_REGIONS.name, GEO_POINTS.name]
-    existing = crate.table_names()
-    missing = [t for t in needed if t not in existing]
-    if not missing:
-        print(f"All demo tables already exist: {', '.join(sorted(needed))}.")
+def ensure_climate_table(crate: CrateClient, ddl_path: Path) -> None:
+    """Create demo.climate_data from the DDL file if it's missing, printing what it runs."""
+    if CLIMATE_TABLE in crate.table_names():
+        print(f"Table demo.{CLIMATE_TABLE} already exists.")
         return
 
-    print(f"Missing table(s): {', '.join(missing)}. Creating from {ddl_path.name}:\n")
+    print(f"Table demo.{CLIMATE_TABLE} missing. Creating from {ddl_path.name}:\n")
     for table, stmt in _parse_ddl(ddl_path):
-        if table in missing:
+        if table == CLIMATE_TABLE:
             print(stmt + ";\n")
             crate.execute(stmt)
     print("Created.\n")
 
 
-# --- per-topic INSERTs --------------------------------------------------------
+# --- climate_data INSERTs -----------------------------------------------------
 #
-# geo_points stores latitude/longitude as plain PK columns, so we insert them.
 # climate_data's latitude/longitude are GENERATED from geo_location, so we must
-# NOT insert them — CrateDB computes them.
+# NOT insert them — CrateDB computes them. We insert only the other three columns.
 
-INSERTS = {
-    GEO_POINTS.name: (
-        "INSERT INTO demo.geo_points "
-        "(latitude, longitude, geo_location, nearest_town) VALUES (?, ?, ?, ?)",
-        lambda r: [r["latitude"], r["longitude"], r["geo_location"], r["nearest_town"]],
-    ),
-    GERMAN_REGIONS.name: (
-        "INSERT INTO demo.german_regions "
-        "(region_name, geo_coords, tourism_info, transportation, economics, "
-        "introduced_species, embedding) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        lambda r: [
-            r["region_name"], r["geo_coords"], r["tourism_info"], r["transportation"],
-            r["economics"], r["introduced_species"], r["embedding"],
-        ],
-    ),
-    CLIMATE_DATA.name: (
-        "INSERT INTO demo.climate_data "
-        "(measurement_time, geo_location, data) VALUES (?, ?, ?)",
-        lambda r: [r["measurement_time"], r["geo_location"], r["data"]],
-    ),
-}
+_INSERT_STMT = (
+    "INSERT INTO demo.climate_data "
+    "(measurement_time, geo_location, data) VALUES (?, ?, ?)"
+)
+
+
+def _to_row(rec: dict) -> list:
+    return [rec["measurement_time"], rec["geo_location"], rec["data"]]
 
 
 class TableLoader:
-    """Buffers decoded records and bulk-inserts them into one CrateDB table."""
+    """Buffers decoded records and bulk-inserts them into demo.climate_data."""
 
-    def __init__(self, crate: CrateClient, name: str, batch_size: int):
+    def __init__(self, crate: CrateClient, batch_size: int):
         self._crate = crate
-        self.name = name
-        self._stmt, self._to_row = INSERTS[name]
         self._batch_size = batch_size
         self._rows: list = []
         self.received = 0
@@ -206,7 +190,7 @@ class TableLoader:
 
     def add(self, rec: dict) -> bool:
         """Buffer one record. Returns True if a batch was flushed."""
-        self._rows.append(self._to_row(rec))
+        self._rows.append(_to_row(rec))
         self.received += 1
         if len(self._rows) >= self._batch_size:
             self.flush()
@@ -216,83 +200,13 @@ class TableLoader:
     def flush(self) -> None:
         if not self._rows:
             return
-        res = self._crate.execute(self._stmt, bulk_args=self._rows)
+        res = self._crate.execute(_INSERT_STMT, bulk_args=self._rows)
         for r in res.get("results", []):
             if r.get("rowcount", -1) == _ROWCOUNT_INSERTED:
                 self.inserted += 1
             else:
                 self.skipped += 1
         self._rows = []
-
-
-# --- value decoding (reverse of serializers.build_value_serializer) -----------
-
-def _proto_to_dict(name: str, msg) -> dict:
-    """Convert a generated protobuf message back to a CrateDB-ready dict."""
-    if name == GEO_POINTS.name:
-        return {
-            "latitude": msg.latitude,
-            "longitude": msg.longitude,
-            "geo_location": list(msg.geo_location),
-            "nearest_town": msg.nearest_town,
-        }
-    if name == GERMAN_REGIONS.name:
-        return {
-            "region_name": msg.region_name,
-            "geo_coords": msg.geo_coords,  # JSON string; normalized below
-            "tourism_info": msg.tourism_info,
-            "transportation": msg.transportation,
-            "economics": msg.economics,
-            "introduced_species": msg.introduced_species,
-            "embedding": list(msg.embedding),
-        }
-    if name == CLIMATE_DATA.name:
-        d = msg.data
-        return {
-            "measurement_time": msg.measurement_time,
-            "geo_location": list(msg.geo_location),
-            "data": {
-                "temperature": d.temperature, "pressure": d.pressure,
-                "u10": d.u10, "v10": d.v10,
-                "latitude": d.latitude, "longitude": d.longitude,
-            },
-        }
-    raise ValueError(f"no protobuf adapter for {name!r}")
-
-
-def make_decoder(fmt: str, spec, topic: str, sr_client):
-    """Return a ``value bytes -> CrateDB-ready dict`` callable for ``fmt``."""
-    if fmt == "json":
-        raw = json.loads
-    else:
-        from confluent_kafka.serialization import MessageField, SerializationContext
-
-        ctx = SerializationContext(topic, MessageField.VALUE)
-        if fmt == "avro":
-            from confluent_kafka.schema_registry.avro import AvroDeserializer
-
-            de = AvroDeserializer(sr_client)
-            raw = lambda b: de(b, ctx)  # noqa: E731 — returns a dict
-        elif fmt == "protobuf":
-            from confluent_kafka.schema_registry.protobuf import ProtobufDeserializer
-
-            de = ProtobufDeserializer(spec.proto_msg, {"use.deprecated.format": False})
-            raw = lambda b: _proto_to_dict(spec.name, de(b, ctx))  # noqa: E731
-        else:
-            raise ValueError(f"unknown format: {fmt!r}")
-
-    # In the binary formats german_regions.geo_coords is a GeoJSON *string*;
-    # CrateDB's GEO_SHAPE column wants the geometry object, so parse it back.
-    if spec.name == GERMAN_REGIONS.name:
-        def decode(b):
-            rec = raw(b)
-            gc = rec.get("geo_coords")
-            if isinstance(gc, str):
-                rec["geo_coords"] = json.loads(gc)
-            return rec
-
-        return decode
-    return raw
 
 
 # --- consuming ----------------------------------------------------------------
@@ -314,45 +228,53 @@ def _commit(consumer) -> None:
             raise
 
 
-def consume_topic(consumer, crate, fmt, spec, topic, sr_client,
-                  batch_size, follow=False, limit=0) -> dict:
-    """Drain ``topic`` into ``demo.<spec.name>``; optionally follow for more.
+def consume_bands(consumer, crate, topic_formats, sr_client, batch_size,
+                  follow=False, limit=0) -> dict:
+    """Drain every band topic into demo.climate_data; optionally follow for more.
 
-    Reads every record currently in the topic (resuming from the consumer
-    group's committed offsets) and bulk-inserts it. Offsets are committed after
-    each flush, so a crash re-reads at most one batch — duplicate rows are
-    absorbed by the tables' primary keys. With ``follow`` it does not stop at the
-    current end of the topic but keeps consuming new records.
+    ``topic_formats`` is a list of ``(topic, fmt)``. All bands are assigned to a
+    single consumer and decoded per-topic, so their records interleave into one
+    shared bulk-insert buffer. Offsets are committed after each flush, so a crash
+    re-reads at most one batch — duplicate rows are absorbed by the table's
+    primary key. With ``follow`` the consumer does not stop when the topics are
+    drained but keeps consuming new records.
     """
     from confluent_kafka import TopicPartition
 
-    decode = make_decoder(fmt, spec, topic, sr_client)
-    loader = TableLoader(crate, spec.name, batch_size)
+    decoders = {}        # topic -> bytes->dict
+    assignment = []      # TopicPartition list, each with a start offset
+    ends: dict = {}      # (topic, partition) -> high watermark
+    pending = set()      # (topic, partition) still behind the high watermark
 
-    md = consumer.list_topics(topic, timeout=10)
-    tmd = md.topics.get(topic)
-    if tmd is None or tmd.error is not None or not tmd.partitions:
-        print(f"  {topic} -> demo.{spec.name}: topic not found / empty, skipping.")
-        return _stats(loader)
+    for topic, fmt in topic_formats:
+        md = consumer.list_topics(topic, timeout=10)
+        tmd = md.topics.get(topic)
+        if tmd is None or tmd.error is not None or not tmd.partitions:
+            print(f"  {topic}: topic not found / empty, skipping.")
+            continue
+        decoders[topic] = serializers.build_value_deserializer(fmt, topic, sr_client)
+        parts = [TopicPartition(topic, p) for p in tmd.partitions]
+        committed = consumer.committed(parts, timeout=10)
+        for tp, com in zip(parts, committed):
+            low, high = consumer.get_watermark_offsets(tp, timeout=10, cached=False)
+            start = com.offset if com.offset is not None and com.offset >= 0 else low
+            tp.offset = start
+            assignment.append(tp)
+            ends[(topic, tp.partition)] = high
+            if start < high:
+                pending.add((topic, tp.partition))
 
-    parts = [TopicPartition(topic, p) for p in tmd.partitions]
-    committed = consumer.committed(parts, timeout=10)
-    ends: dict = {}
-    pending = set()
-    assignment = []
-    for tp, com in zip(parts, committed):
-        low, high = consumer.get_watermark_offsets(tp, timeout=10, cached=False)
-        start = com.offset if com.offset is not None and com.offset >= 0 else low
-        tp.offset = start
-        assignment.append(tp)
-        ends[tp.partition] = high
-        if start < high:
-            pending.add(tp.partition)
+    if not assignment:
+        print("  no band topics found; nothing to consume.")
+        return _stats(TableLoader(crate, batch_size))
+
     consumer.assign(assignment)
+    loader = TableLoader(crate, batch_size)
 
-    backlog = sum(ends[tp.partition] - tp.offset for tp in assignment)
+    backlog = sum(ends[(tp.topic, tp.partition)] - tp.offset for tp in assignment)
     print(
-        f"  {topic} -> demo.{spec.name}: {backlog:,} record(s) to read"
+        f"  {len(decoders)} band topic(s) -> demo.climate_data: "
+        f"{backlog:,} record(s) to read"
         + (" (then following for new data, Ctrl-C to stop)" if follow else "")
     )
 
@@ -363,20 +285,24 @@ def consume_topic(consumer, crate, fmt, spec, topic, sr_client,
                 continue
             if msg.error():
                 continue
-            if loader.add(decode(msg.value())):
+            if loader.add(decoders[msg.topic()](msg.value())):
                 _commit(consumer)
-            if msg.offset() + 1 >= ends.get(msg.partition(), 0):
-                pending.discard(msg.partition())
+            key = (msg.topic(), msg.partition())
+            if msg.offset() + 1 >= ends.get(key, 0):
+                pending.discard(key)
             if limit and loader.received >= limit:
                 break
+    except KeyboardInterrupt:
+        # Normal way to stop --follow; fall through to flush + commit + report.
+        print("\nInterrupted — stopping.")
     finally:
         loader.flush()
         _commit(consumer)
 
     s = _stats(loader)
     print(
-        f"  {topic} -> demo.{spec.name}: done "
-        f"({s['inserted']:,} inserted, {s['skipped']:,} skipped, {s['received']:,} read)"
+        f"  done: {s['inserted']:,} inserted, {s['skipped']:,} skipped, "
+        f"{s['received']:,} read"
     )
     return s
 
@@ -391,9 +317,8 @@ def _stats(loader: TableLoader) -> dict:
 def parse_args(argv):
     p = argparse.ArgumentParser(
         prog="stream_from_kafka_into_crate.py",
-        description="Consume the demo datasets from Kafka into CrateDB.",
+        description="Consume the climate_data latitude bands from Kafka into CrateDB.",
     )
-    p.add_argument("--format", choices=("json", "avro", "protobuf"), default="json")
     p.add_argument(
         "--bootstrap-servers",
         default=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
@@ -410,9 +335,9 @@ def parse_args(argv):
     p.add_argument("--group-id", default=os.environ.get("KAFKA_GROUP_ID", "crate-loader"))
     p.add_argument("--batch-size", type=int, default=1000)
     p.add_argument("--climate-limit", type=int, default=0,
-                   help="Cap climate_data records (0 = all).")
+                   help="Cap total records (0 = all).")
     p.add_argument("--follow", action="store_true",
-                   help="Keep consuming new climate_data after the backlog is drained.")
+                   help="Keep consuming new records after the backlog is drained.")
     p.add_argument("--ddl-file", default=str(DEFAULT_DDL))
 
     args = p.parse_args(argv)
@@ -433,16 +358,14 @@ def main(argv=None) -> int:
 
     crate = CrateClient(args.cratedb_url, auth)
     try:
-        ensure_tables(crate, Path(args.ddl_file))
+        ensure_climate_table(crate, Path(args.ddl_file))
     except (CrateError, requests.RequestException) as exc:
         print(f"ERROR: CrateDB at {args.cratedb_url}: {exc}", file=sys.stderr)
         return EXIT_CRATE
 
-    sr_client = None
-    if args.format != "json":
-        from confluent_kafka.schema_registry import SchemaRegistryClient
+    from confluent_kafka.schema_registry import SchemaRegistryClient
 
-        sr_client = SchemaRegistryClient({"url": args.schema_registry_url})
+    sr_client = SchemaRegistryClient({"url": args.schema_registry_url})
 
     from confluent_kafka import Consumer
 
@@ -453,29 +376,20 @@ def main(argv=None) -> int:
         "auto.offset.reset": "earliest",
     })
 
-    def topic_name(spec):
-        return f"{args.topic_prefix}{spec.name}"
+    topic_formats = [(f"{args.topic_prefix}{b.topic}", b.fmt) for b in BANDS]
 
     print(
-        f"Consuming demo data from Kafka at {args.bootstrap_servers} as {args.format} "
-        f"into CrateDB at {args.cratedb_url}"
-        + (f" (registry {args.schema_registry_url})" if sr_client else "")
+        f"Consuming climate_data bands from Kafka at {args.bootstrap_servers} "
+        f"(registry {args.schema_registry_url}) into CrateDB at {args.cratedb_url}\n"
+        "  bands: "
+        + ", ".join(f"{t} [{f}]" for t, f in topic_formats)
     )
 
-    stats = {}
     try:
-        # Reference tables first, in full; then the fact stream (optionally followed).
-        for spec in (GERMAN_REGIONS, GEO_POINTS):
-            stats[spec.name] = consume_topic(
-                consumer, crate, args.format, spec, topic_name(spec),
-                sr_client, args.batch_size,
-            )
-        stats[CLIMATE_DATA.name] = consume_topic(
-            consumer, crate, args.format, CLIMATE_DATA, topic_name(CLIMATE_DATA),
-            sr_client, args.batch_size, follow=args.follow, limit=args.climate_limit,
+        stats = consume_bands(
+            consumer, crate, topic_formats, sr_client, args.batch_size,
+            follow=args.follow, limit=args.climate_limit,
         )
-    except KeyboardInterrupt:
-        print("\nInterrupted — stopping.")
     except (CrateError, requests.RequestException) as exc:
         print(f"ERROR: CrateDB insert failed: {exc}", file=sys.stderr)
         consumer.close()
@@ -483,13 +397,9 @@ def main(argv=None) -> int:
     finally:
         consumer.close()
 
-    inserted = sum(s["inserted"] for s in stats.values())
     print(
-        "Done. "
-        + ", ".join(
-            f"{name}={s['inserted']:,}/{s['received']:,}" for name, s in stats.items()
-        )
-        + f", total_inserted={inserted:,}"
+        f"Done. climate_data={stats['inserted']:,}/{stats['received']:,} "
+        f"(skipped {stats['skipped']:,})"
     )
     return 0
 

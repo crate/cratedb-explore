@@ -15,23 +15,19 @@
 # limitations under the License.
 
 """
-Value encoding for the demo-data loader: JSON, Avro, or Protobuf.
+Latitude bands and value (de)serialization for the climate_data loader.
 
-Each of the three datasets maps to one Kafka topic with its own schema, so
-serialization is described per-topic by a ``TopicSpec``. The ``StreamSink``
-(see ``sinks.py``) only ever handles the bytes this module produces.
+The single ``climate_data`` dataset is split into three latitude **bands**, and
+each band travels in a *different* wire format so one run exercises all three
+encodings at once:
 
-Format notes
-------------
-* ``json``     — plain UTF-8 ``json.dumps`` of the raw record; needs no Schema
-                 Registry. ``geo_coords`` stays a native nested GeoJSON object.
-* ``avro``     — Confluent Avro; ``geo_coords`` is stored as a GeoJSON *string*
-                 (the source mixes Polygon and MultiPolygon, i.e. different
-                 array depths, which a single Avro field can't express).
-* ``protobuf`` — Confluent Protobuf; same ``geo_coords``-as-string treatment.
+* the **northern** band  -> Avro      (topic ``climate_data_north``)
+* the **central** band   -> JSON      (topic ``climate_data_central``)
+* the **southern** band  -> Protobuf  (topic ``climate_data_south``)
 
-Avro and Protobuf auto-register their schemas with the Schema Registry on first
-use.
+Avro and Protobuf register their schemas with a Confluent Schema Registry; JSON
+needs none. The ``StreamSink`` (see ``sinks.py``) only ever handles the bytes
+this module produces.
 """
 
 import json
@@ -39,41 +35,33 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from schemas import climate_data_pb2, geo_point_pb2, german_region_pb2
+from schemas import climate_data_pb2
 
 _SCHEMA_DIR = Path(__file__).parent / "schemas"
 
 FORMATS = ("json", "avro", "protobuf")
 
 
-# --- per-topic dict / protobuf adapters --------------------------------------
-#
-# The S3 records are already close to the target shape; only german_regions
-# needs its nested geo_coords flattened to a JSON string for the binary formats.
+# --- the climate_data record -------------------------------------------------
 
-def _region_to_avro(rec: dict) -> dict:
-    return {**rec, "geo_coords": json.dumps(rec["geo_coords"], ensure_ascii=False)}
+CLIMATE_AVSC = (_SCHEMA_DIR / "climate_data.avsc").read_text(encoding="utf-8")
+CLIMATE_PROTO_MSG = climate_data_pb2.ClimateData
 
 
-def _geo_point_to_proto(rec: dict):
-    return geo_point_pb2.GeoPoint(
-        latitude=rec["latitude"],
-        longitude=rec["longitude"],
-        geo_location=rec["geo_location"],
-        nearest_town=rec["nearest_town"],
-    )
+def climate_key(rec: dict) -> str:
+    """Message key = ``"lon,lat"`` (location), matching the CrateDB layout.
+
+    climate_data is an event stream — many measurement_times share a location —
+    so this is a subset of the row's identity, not a unique key. Don't enable
+    log compaction on the band topics (it would collapse each location's series
+    to a single reading); uniqueness is enforced downstream by CrateDB's PK.
+    """
+    return f'{rec["geo_location"][0]},{rec["geo_location"][1]}'
 
 
-def _region_to_proto(rec: dict):
-    return german_region_pb2.GermanRegion(
-        region_name=rec["region_name"],
-        geo_coords=json.dumps(rec["geo_coords"], ensure_ascii=False),
-        tourism_info=rec["tourism_info"],
-        transportation=rec["transportation"],
-        economics=rec["economics"],
-        introduced_species=rec["introduced_species"],
-        embedding=rec["embedding"],
-    )
+def latitude_of(rec: dict) -> float:
+    """Latitude of a record, from ``geo_location`` = ``[longitude, latitude]``."""
+    return rec["geo_location"][1]
 
 
 def _climate_to_proto(rec: dict):
@@ -92,61 +80,61 @@ def _climate_to_proto(rec: dict):
     )
 
 
+def _proto_to_climate(msg) -> dict:
+    """Convert a generated ClimateData message back to a CrateDB-ready dict."""
+    d = msg.data
+    return {
+        "measurement_time": msg.measurement_time,
+        "geo_location": list(msg.geo_location),
+        "data": {
+            "temperature": d.temperature, "pressure": d.pressure,
+            "u10": d.u10, "v10": d.v10,
+            "latitude": d.latitude, "longitude": d.longitude,
+        },
+    }
+
+
+# --- latitude bands ----------------------------------------------------------
+
 @dataclass(frozen=True)
-class TopicSpec:
-    """Everything topic-specific: name, message key, and per-format schemas."""
+class Band:
+    """One latitude band of climate_data, with its own topic and wire format."""
 
-    name: str
-    key_of: Callable[[dict], str]
-    avsc_file: str
-    proto_msg: type
-    to_avro: Callable[[dict], dict]
-    to_proto: Callable[[dict], object]
-
-    @property
-    def avsc(self) -> str:
-        return (_SCHEMA_DIR / self.avsc_file).read_text(encoding="utf-8")
+    name: str    # north / central / south
+    fmt: str     # avro / json / protobuf  (one of FORMATS)
+    topic: str   # base topic name (before any --topic-prefix)
 
 
-GEO_POINTS = TopicSpec(
-    name="geo_points",
-    # Key on the coordinates (the record's identity, = the CrateDB PK), not on
-    # nearest_town, which is a non-unique attribute (10 towns name two stations).
-    # Same "lon,lat" form as climate_data, so the two co-partition on location.
-    key_of=lambda r: f'{r["geo_location"][0]},{r["geo_location"][1]}',
-    avsc_file="geo_point.avsc",
-    proto_msg=geo_point_pb2.GeoPoint,
-    to_avro=lambda r: r,
-    to_proto=_geo_point_to_proto,
-)
+# Germany spans roughly 47.5°N–54.75°N. The three bands below split it into
+# (near-)thirds; the cut latitudes are the producer's defaults and can be moved
+# on its command line. Each band is pinned to a distinct format on purpose.
+NORTH = Band(name="north", fmt="avro", topic="climate_data_north")
+CENTRAL = Band(name="central", fmt="json", topic="climate_data_central")
+SOUTH = Band(name="south", fmt="protobuf", topic="climate_data_south")
+BANDS = (NORTH, CENTRAL, SOUTH)
 
-GERMAN_REGIONS = TopicSpec(
-    name="german_regions",
-    key_of=lambda r: r["region_name"],
-    avsc_file="german_region.avsc",
-    proto_msg=german_region_pb2.GermanRegion,
-    to_avro=_region_to_avro,
-    to_proto=_region_to_proto,
-)
+# Default band boundaries, in degrees latitude (overridable on the producer CLI).
+DEFAULT_SOUTH_MAX_LAT = 50.0   # lat <  50.0  -> south
+DEFAULT_NORTH_MIN_LAT = 52.0   # lat >= 52.0  -> north;  in between -> central
 
-CLIMATE_DATA = TopicSpec(
-    name="climate_data",
-    key_of=lambda r: f'{r["geo_location"][0]},{r["geo_location"][1]}',
-    avsc_file="climate_data.avsc",
-    proto_msg=climate_data_pb2.ClimateData,
-    to_avro=lambda r: r,
-    to_proto=_climate_to_proto,
-)
 
+def band_for_latitude(lat: float, south_max: float, north_min: float) -> Band:
+    """Classify a latitude into its band (south < ``south_max`` <= central < ``north_min`` <= north)."""
+    if lat < south_max:
+        return SOUTH
+    if lat >= north_min:
+        return NORTH
+    return CENTRAL
+
+
+# --- (de)serializer factories ------------------------------------------------
 
 def key_serializer() -> Callable[[str], bytes]:
     """Message keys are plain UTF-8 strings; no Schema Registry involved."""
     return lambda key: key.encode("utf-8")
 
 
-def build_value_serializer(
-    fmt: str, spec: TopicSpec, topic: str, sr_client
-) -> Callable[[dict], bytes]:
+def build_value_serializer(fmt: str, topic: str, sr_client) -> Callable[[dict], bytes]:
     """Return a ``record dict -> value bytes`` callable for ``fmt`` on ``topic``.
 
     ``sr_client`` (a ``SchemaRegistryClient``) is required for avro/protobuf and
@@ -163,17 +151,39 @@ def build_value_serializer(
     if fmt == "avro":
         from confluent_kafka.schema_registry.avro import AvroSerializer
 
-        avro_ser = AvroSerializer(sr_client, spec.avsc)
-        to_avro = spec.to_avro
-        return lambda rec: avro_ser(to_avro(rec), ctx)
+        avro_ser = AvroSerializer(sr_client, CLIMATE_AVSC)
+        return lambda rec: avro_ser(rec, ctx)
 
     if fmt == "protobuf":
         from confluent_kafka.schema_registry.protobuf import ProtobufSerializer
 
         proto_ser = ProtobufSerializer(
-            spec.proto_msg, sr_client, {"use.deprecated.format": False}
+            CLIMATE_PROTO_MSG, sr_client, {"use.deprecated.format": False}
         )
-        to_proto = spec.to_proto
-        return lambda rec: proto_ser(to_proto(rec), ctx)
+        return lambda rec: proto_ser(_climate_to_proto(rec), ctx)
+
+    raise ValueError(f"unknown format: {fmt!r} (expected one of {FORMATS})")
+
+
+def build_value_deserializer(fmt: str, topic: str, sr_client) -> Callable[[bytes], dict]:
+    """Return a ``value bytes -> CrateDB-ready dict`` callable for ``fmt`` (reverse of above)."""
+    if fmt == "json":
+        return json.loads
+
+    from confluent_kafka.serialization import MessageField, SerializationContext
+
+    ctx = SerializationContext(topic, MessageField.VALUE)
+
+    if fmt == "avro":
+        from confluent_kafka.schema_registry.avro import AvroDeserializer
+
+        de = AvroDeserializer(sr_client)
+        return lambda b: de(b, ctx)  # already a dict
+
+    if fmt == "protobuf":
+        from confluent_kafka.schema_registry.protobuf import ProtobufDeserializer
+
+        de = ProtobufDeserializer(CLIMATE_PROTO_MSG, {"use.deprecated.format": False})
+        return lambda b: _proto_to_climate(de(b, ctx))
 
     raise ValueError(f"unknown format: {fmt!r} (expected one of {FORMATS})")

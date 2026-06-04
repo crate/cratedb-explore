@@ -1,90 +1,92 @@
-# src_stream_load — stream the demo datasets through Kafka
+# src_stream_load — stream climate_data through Kafka, split by latitude
 
-We have two Python programs that write the demo dataset into Kafka, and then load it from Kafka
-into CrateDB:
+Two Python programs move the demo `climate_data` dataset through Kafka and into
+CrateDB. The twist: the single dataset is **split by latitude into three bands**,
+and each band travels in a **different wire format** — so one run exercises JSON,
+Avro, and Protobuf side by side.
 
-- **`stream_load_into_kafka.py`** — the producer. Reads the three demo JSON files
-  from S3 and streams them into Kafka, encoded as **JSON, Avro, or Protobuf**
-  (Avro and Protobuf register their schemas with a Confluent **Schema Registry**).
-- **`stream_from_kafka_into_crate.py`** — the consumer. Reads those same topics
-  back out of Kafka, deserializes them, and bulk-loads them into **CrateDB** over
-  its HTTP `_sql` endpoint, creating the tables first if they don't exist.
+- **`stream_load_into_kafka.py`** — the producer. Reads `climate_data` from S3,
+  classifies each record by latitude, and writes it to that band's topic in that
+  band's format.
+- **`stream_from_kafka_into_crate.py`** — the consumer. Reads all three band
+  topics back out of Kafka, deserializes each in its own format, and bulk-loads
+  every record into the one **`demo.climate_data`** table over CrateDB's HTTP
+  `_sql` endpoint (creating the table first if it doesn't exist).
+
+## The bands
+
+`climate_data` records carry `geo_location = [longitude, latitude]`. The producer
+routes each record by its **latitude** into one of three bands:
+
+| Band | Latitude | Format | Topic | Schema Registry |
+| --- | --- | --- | --- | --- |
+| northern | `lat ≥ --north-min-lat` (default 52.0) | **Avro** | `climate_data_north` | required |
+| central | between the two cuts | **JSON** | `climate_data_central` | not used |
+| southern | `lat < --south-max-lat` (default 50.0) | **Protobuf** | `climate_data_south` | required |
+
+Germany spans roughly 47.5°N–54.75°N, so the default cuts at **50.0** and **52.0**
+divide it into near-thirds (a 3,000-record sample splits ≈ 831 / 1,014 / 1,155
+south / central / north). Move the boundaries with `--south-max-lat` /
+`--north-min-lat`.
 
 ## The data
 
-The three sources are newline-delimited JSON (one object per line):
+The source is newline-delimited JSON (one object per line):
 
-| Source file | Topic | Records | Role |
-| --- | --- | --- | --- |
-| `german_regions.json` | `german_regions` | 16 | reference table — 16 German Länder with GeoJSON geometry, descriptive text, and a 1536-d embedding |
-| `geo_points.json` | `geo_points` | 726 | reference table — weather-station locations |
-| `export-demo_climate_data_large_v2.json` | `climate_data` | ~265k | fact stream — per-location climate measurements (temperature in **Kelvin**) |
+| Source file | Records | Role |
+| --- | --- | --- |
+| `export-demo_climate_data_large_v2.json` | ~265k | per-location climate measurements (temperature in **Kelvin**) |
 
-Defaults point at the public S3 bucket
-(`https://guided-path.s3.us-east-1.amazonaws.com/…`); override per source with
-`--geo-points-url` / `--german-regions-url` / `--climate-data-url`.
+The default points at the public S3 bucket
+(`https://guided-path.s3.us-east-1.amazonaws.com/…`); override it with
+`--source-url`.
 
-## Load order and rate limiting
+## Rate limiting
 
-The two small **reference tables are streamed first and in full** at full speed
-(`german_regions`, then `geo_points`). The large **`climate_data` fact stream is
-streamed last** and is the only stream that honours `--climate-rate`
-(records/sec) and `--climate-limit` (a record cap, handy for smoke tests). This
-mirrors how the data is used downstream: the dimension tables must be complete
-before the facts that reference them start flowing.
+The whole stream honours `--climate-rate` (records/sec) and `--climate-limit` (a
+record cap, handy for smoke tests). Both apply across all three bands combined.
 
 ## Encodings and the Schema Registry
 
-| `--format` | Wire bytes | Schema Registry |
+| Band format | Wire bytes | Schema Registry |
 | --- | --- | --- |
-| `json` (default) | UTF-8 `json.dumps` of the raw record | not used |
-| `avro` | Confluent Avro | required |
-| `protobuf` | Confluent Protobuf | required |
+| `json` (central) | UTF-8 `json.dumps` of the raw record | not used |
+| `avro` (north) | Confluent Avro | required |
+| `protobuf` (south) | Confluent Protobuf | required |
 
-Message **keys** are plain UTF-8 strings. The reference topics are keyed by their
-entity identity (= their CrateDB primary key): `"lon,lat"` for `geo_points`,
-`region_name` for `german_regions`. `climate_data` is keyed by `"lon,lat"`
-(location only) — a subset of its identity, since it's an event stream (see
-[Re-running the loader](#re-running-the-loader-no-broker-side-dedup)). `geo_points`
-and `climate_data` share the `"lon,lat"` key space, so they co-partition on location.
+Because two of the three bands are binary, **a Confluent Schema Registry is
+always required** — the Avro and Protobuf bands auto-register their schemas with
+it on first use. Schemas live in `schemas/` (`climate_data.avsc`,
+`climate_data.proto`).
 
-> **`geo_coords`:** the German-region geometry is a GeoJSON `Polygon` *or*
-> `MultiPolygon` (different array depths), which a single Avro/Protobuf field
-> can't express. For `avro`/`protobuf` it is stored as a GeoJSON **string**; for
-> `json` it stays a native nested object. Schemas live in `schemas/`.
+Message **keys** are plain UTF-8 strings: `"lon,lat"` (the record's location).
+Many measurement_times share a location, so the key is only a *subset* of the
+row's identity — it co-locates a station's readings on one partition but is not
+unique (see [Re-running the loader](#re-running-the-loader-no-broker-side-dedup)).
 
 ## Re-running the loader (no broker-side dedup)
 
-Producing to Kafka is **append-only** — unlike the CrateDB tables (which dedup on
-their primary keys, see the [top-level README](../README.md#loading-the-data-with-copy-from)),
-re-running the loader writes another full copy of every record. The broker does
-not reject duplicates.
+Producing to Kafka is **append-only** — unlike the CrateDB table (which dedups on
+its primary key, see the [top-level README](../README.md#loading-the-data-with-copy-from)),
+re-running the producer writes another full copy of every record. The broker
+does not reject duplicates.
 
-What the keys give you is the option of **log compaction**:
-
-- `german_regions` and `geo_points` are keyed by a unique entity identity
-  (`region_name`; `"lon,lat"` coordinates). On a compacted topic the broker keeps
-  only the latest value per key, so reloads converge to one record per entity —
-  effectively idempotent. (Note `geo_points` is keyed by coordinates, **not** by
-  `nearest_town`, which is non-unique — 10 towns name two stations apiece, so
-  compacting by town would silently drop those stations.)
-- `climate_data` is keyed by **location only** (`"lon,lat"`), not by its full
-  `(measurement_time, location)` identity, because it's an event stream — many
-  timestamps share a location. **Don't compact it** (that would collapse the
-  series to one reading per location). Its real uniqueness is enforced downstream
-  by the `climate_data` primary key in CrateDB, not by Kafka.
+The band topics are keyed by **location only** (`"lon,lat"`), not by the full
+`(measurement_time, location)` identity, because `climate_data` is an event
+stream. **Don't enable log compaction on them** — that would collapse each
+location's series to a single reading. Real uniqueness is enforced downstream by
+the `climate_data` primary key in CrateDB, not by Kafka.
 
 So: re-running is safe (it never corrupts anything) but additive. To start clean,
-delete/recreate the topics; for idempotent reference data, enable compaction on
-the two keyed reference topics.
+delete/recreate the topics, or `DELETE`/`DROP` and recreate `demo.climate_data`.
 
 ## Targeting a different streaming platform
 
-The destination is isolated behind the `StreamSink` interface (that we wrote) in `sinks.py`
-(`send` / `flush` / `close`), which only ever sees pre-serialized bytes.
-`KafkaSink` is the one implementation today; to target Pulsar, Kinesis, etc.,
-implement `StreamSink` and construct it in `stream_load_into_kafka.py` — the read,
-serialize, and rate-limit loop is unchanged.
+The destination is isolated behind the `StreamSink` interface (that we wrote) in
+`sinks.py` (`send` / `flush` / `close`), which only ever sees pre-serialized
+bytes. `KafkaSink` is the one implementation today; to target Pulsar, Kinesis,
+etc., implement `StreamSink` and construct it in `stream_load_into_kafka.py` —
+the read, route, serialize, and rate-limit loop is unchanged.
 
 ## Install and run
 
@@ -93,70 +95,70 @@ cd src_stream_load
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# JSON — no Schema Registry needed; smoke test with a small climate cap:
-python stream_load_into_kafka.py --bootstrap-servers localhost:9092  --format json --climate-limit 1000 --climate-rate 200
-
-# Avro / Protobuf — against Kafka + a Schema Registry:
-python stream_load_into_kafka.py --format avro \
+# Smoke test against a local broker + registry with a small cap:
+python stream_load_into_kafka.py \
     --bootstrap-servers localhost:9092 \
-    --schema-registry-url http://localhost:8081
+    --schema-registry-url http://localhost:8081 \
+    --climate-limit 3000 --climate-rate 500
 ```
 
 A local Kafka + Schema Registry (e.g. the Confluent `cp-all-in-one`
-docker-compose) is the simplest way to exercise the binary formats.
+docker-compose) is the simplest way to exercise all three bands.
 
 ### CLI reference
 
 | Option | Default | Notes |
 | --- | --- | --- |
-| `--format {json,avro,protobuf}` | `json` | value encoding |
 | `--bootstrap-servers HOST:PORT` | `localhost:9092` | env `KAFKA_BOOTSTRAP_SERVERS` |
-| `--schema-registry-url URL` | `http://localhost:8081` | env `SCHEMA_REGISTRY_URL`; avro/protobuf only |
-| `--climate-rate N` | `0` (unlimited) | max `climate_data` records/sec |
-| `--climate-limit N` | `0` (all) | cap on `climate_data` records |
-| `--topic-prefix PREFIX` | none | prepended to every topic name |
-| `--geo-points-url` / `--german-regions-url` / `--climate-data-url` | S3 URLs | override a source |
+| `--schema-registry-url URL` | `http://localhost:8081` | env `SCHEMA_REGISTRY_URL`; used by the Avro + Protobuf bands |
+| `--climate-rate N` | `0` (unlimited) | max records/sec across all bands |
+| `--climate-limit N` | `0` (all) | cap on total records |
+| `--south-max-lat L` | `50.0` | latitudes below `L` go to the southern (Protobuf) band |
+| `--north-min-lat L` | `52.0` | latitudes `≥ L` go to the northern (Avro) band |
+| `--topic-prefix PREFIX` | none | prepended to every band topic name |
+| `--source-url URL` | S3 URL | override the climate_data source |
 
 Exit codes: `0` success · `1` bad argument · `2` source download failed ·
 `3` one or more records failed to deliver.
 
 ## Loading Kafka into CrateDB
 
-`stream_from_kafka_into_crate.py` is the read side: it consumes the three topics
-and bulk-inserts them into `demo.geo_points`, `demo.german_regions`, and
-`demo.climate_data` over CrateDB's HTTP `_sql` endpoint. It mirrors the
-producer's CLI — the same `--format`, `--bootstrap-servers`,
-`--schema-registry-url`, and `--topic-prefix` choose what to read — and applies
-the same load order (reference tables in full first, then the `climate_data`
-fact stream).
+`stream_from_kafka_into_crate.py` is the read side: it consumes all three band
+topics — each in its own format — and bulk-inserts every record into the single
+`demo.climate_data` table over CrateDB's HTTP `_sql` endpoint. It mirrors the
+producer's `--bootstrap-servers`, `--schema-registry-url`, and `--topic-prefix`.
 
 ```bash
 cd src_stream_load && source .venv/bin/activate
 
-# Read the JSON topics into a local CrateDB:
-python stream_from_kafka_into_crate.py --format json \
-    --bootstrap-servers localhost:9092 --cratedb-url http://localhost:4200
+# Read the three bands into CrateDB:
+python stream_from_kafka_into_crate.py \
+    --bootstrap-servers localhost:9092 \
+    --schema-registry-url http://localhost:8081 \
+    --cratedb-url http://localhost:4200
 
-# Read the Avro topics (note the matching --topic-prefix), tailing for new data:
-python stream_from_kafka_into_crate.py --format avro --topic-prefix avro_ \
-    --bootstrap-servers localhost:9092 --schema-registry-url http://localhost:8081 \
+# Same, but tail the topics for new readings (Ctrl-C to stop):
+python stream_from_kafka_into_crate.py \
+    --bootstrap-servers localhost:9092 \
+    --schema-registry-url http://localhost:8081 \
     --cratedb-url http://localhost:4200 --follow
 ```
 
 Behaviour worth knowing:
 
-- **It creates the tables if they're missing.** On startup it checks
-  `information_schema` and, for any absent demo table, runs the matching
+- **It creates the table if it's missing.** On startup it checks
+  `information_schema` and, if `demo.climate_data` is absent, runs the matching
   statement from `../sql/german_weather_data_ddl.sql`, printing the DDL as it
   goes. `climate_data`'s `latitude`/`longitude` are GENERATED from
   `geo_location`, so the loader inserts only `measurement_time`, `geo_location`,
   and `data` and lets CrateDB compute the rest.
-- **`--follow` tails `climate_data`.** Without it the consumer stops once it has
-  drained every record currently in the topic. With it, the reference tables
-  still finish and stop, but `climate_data` keeps consuming and inserting new
-  readings until you Ctrl-C.
-- **Re-runs are idempotent.** Inserts are plain `INSERT`s; CrateDB's primary
-  keys reject duplicates per-row (reported as *skipped*, not *inserted*), so
+- **All three bands are read together.** They are assigned to one consumer and
+  decoded per-topic, so their rows interleave into one bulk-insert buffer.
+- **`--follow` tails the topics.** Without it the consumer stops once it has
+  drained every record currently in the three topics. With it, it keeps
+  consuming and inserting new readings until you Ctrl-C.
+- **Re-runs are idempotent.** Inserts are plain `INSERT`s; CrateDB's primary key
+  rejects duplicates per-row (reported as *skipped*, not *inserted*), so
   re-reading a topic never doubles the data. Offsets are committed after each
   batch, so the consumer also resumes from where it left off.
 - **Credentials come from the environment.** Set `CRATE_USER` / `CRATE_PASSWORD`
@@ -167,13 +169,15 @@ Behaviour worth knowing:
 This is the Kafka-fed counterpart to loading CrateDB straight from S3 with
 [`COPY FROM`](../README.md#loading-the-data-with-copy-from).
 
-## Consuming a topic yourself
+## Consuming a band topic yourself
 
-### First create your tables..
+### First create your table
 
-Before you start you'll need to created the tables in Crate. See [german_weather_data_ddl.sql](../sql/german_weather_data_ddl.sql). Note that there 
-is also '[german_weather_data_dynamic_ddl.sql](../sql/german_weather_data_dynamic_ddl.sql)', which creates columns from weather data as and when they
-are first seen. So while the '[offical](../sql/german_weather_data_ddl.sql)' DDL file has:
+Before you start you'll need `demo.climate_data` to exist in CrateDB. See
+[german_weather_data_ddl.sql](../sql/german_weather_data_ddl.sql). Note there is
+also '[german_weather_data_dynamic_ddl.sql](../sql/german_weather_data_dynamic_ddl.sql)',
+which creates columns from weather data as and when they are first seen. So while
+the '[official](../sql/german_weather_data_ddl.sql)' DDL file has:
 
 ```sql
 data OBJECT(DYNAMIC) AS (
@@ -184,45 +188,41 @@ data OBJECT(DYNAMIC) AS (
       latitude DOUBLE PRECISION,
       longitude DOUBLE PRECISION
    ),
-   ```
+```
 '[german_weather_data_dynamic_ddl.sql](../sql/german_weather_data_dynamic_ddl.sql)' has:
 
 ```sql
 data OBJECT(DYNAMIC),
 ```
-'DYNAMIC' means that as previously unknown columns are encountered, CrateDB [adds them to the table](https://cratedb.com/blog/handling-dynamic-objects-in-cratedb). 
-This means if I am trying to load a 130 column table I don't need to 
-add all 130 columns to the DDL by hand - I can name the important ones, and use DYNAMIC to find the rest.
-Once the data is loaded I can see the actual schema with:
+'DYNAMIC' means that as previously unknown columns are encountered, CrateDB [adds them to the table](https://cratedb.com/blog/handling-dynamic-objects-in-cratedb).
+This means if I am trying to load a 130 column table I don't need to add all 130
+columns to the DDL by hand - I can name the important ones, and use DYNAMIC to
+find the rest. Once the data is loaded I can see the actual schema with:
 
 ```sql
 SHOW CREATE TABLE demo.climate_data;
 ```
+Note: If you have already worked with this data set, you may already have a
+CrateDB instance with a populated table. You'll need to either drop or delete
+from `demo.climate_data` if you want to load the data again.
 
-### Loading the data..
+### Loading the data
 
 If all you want is the topics loaded into CrateDB, use the ready-made consumer —
 [`stream_from_kafka_into_crate.py`](stream_from_kafka_into_crate.py) — described
 under [Loading Kafka into CrateDB](#loading-kafka-into-cratedb) above. It already
-decodes every format, creates the tables, and bulk-inserts the rows, e.g.:
+decodes every band, creates the table, and bulk-inserts the rows.
 
-```bash
-cd src_stream_load && source .venv/bin/activate
-python stream_from_kafka_into_crate.py --format json \
-    --bootstrap-servers localhost:9092 --cratedb-url http://localhost:4200
-```
-
-The rest of this section is for when you want to read a topic into your *own*
+The rest of this section is for when you want to read a band into your *own*
 application instead of into CrateDB — for that, see how
 [`stream_from_kafka_into_crate.py`](stream_from_kafka_into_crate.py) decodes each
 format and adapt the snippets below.
 
-Message keys are UTF-8 strings in every format; only the value decoding differs.
-The snippets below read the `geo_points` topic — swap the topic name for
-`german_regions` or `climate_data`. Run them from `src_stream_load/` so the
-generated `schemas/*_pb2.py` are importable.
+Message keys are UTF-8 strings in every format; only the value decoding differs
+per band. Run the snippets from `src_stream_load/` so the generated
+`schemas/climate_data_pb2.py` is importable.
 
-**JSON** — no Schema Registry; the value is just UTF-8 JSON:
+**Central band — JSON** — no Schema Registry; the value is just UTF-8 JSON:
 
 ```python
 import json
@@ -230,18 +230,18 @@ from confluent_kafka import Consumer
 
 c = Consumer({"bootstrap.servers": "localhost:9092",
               "group.id": "demo-consumer", "auto.offset.reset": "earliest"})
-c.subscribe(["geo_points"])
+c.subscribe(["climate_data_central"])
 while True:
     msg = c.poll(1.0)
     if msg is None or msg.error():
         continue
     key = msg.key().decode("utf-8") if msg.key() else None
     value = json.loads(msg.value())
-    print(key, value["nearest_town"])
+    print(key, value["data"]["temperature"])   # Kelvin
 ```
 
-**Avro** — the `AvroDeserializer` fetches the writer schema from the registry and
-returns a `dict`:
+**Northern band — Avro** — the `AvroDeserializer` fetches the writer schema from
+the registry and returns a `dict`:
 
 ```python
 from confluent_kafka import Consumer
@@ -254,50 +254,46 @@ deserialize = AvroDeserializer(sr)
 
 c = Consumer({"bootstrap.servers": "localhost:9092",
               "group.id": "demo-consumer", "auto.offset.reset": "earliest"})
-c.subscribe(["geo_points"])
+c.subscribe(["climate_data_north"])
 while True:
     msg = c.poll(1.0)
     if msg is None or msg.error():
         continue
     ctx = SerializationContext(msg.topic(), MessageField.VALUE)
     record = deserialize(msg.value(), ctx)     # -> dict
-    print(msg.key().decode("utf-8"), record["nearest_town"])
+    print(msg.key().decode("utf-8"), record["data"]["temperature"])
 ```
 
-**Protobuf** — give the `ProtobufDeserializer` the matching generated message
-class; it returns a protobuf object:
+**Southern band — Protobuf** — give the `ProtobufDeserializer` the generated
+message class; it returns a protobuf object:
 
 ```python
 from confluent_kafka import Consumer
 from confluent_kafka.schema_registry.protobuf import ProtobufDeserializer
 from confluent_kafka.serialization import MessageField, SerializationContext
-from schemas.geo_point_pb2 import GeoPoint
+from schemas.climate_data_pb2 import ClimateData
 
-deserialize = ProtobufDeserializer(GeoPoint, {"use.deprecated.format": False})
+deserialize = ProtobufDeserializer(ClimateData, {"use.deprecated.format": False})
 
 c = Consumer({"bootstrap.servers": "localhost:9092",
               "group.id": "demo-consumer", "auto.offset.reset": "earliest"})
-c.subscribe(["geo_points"])
+c.subscribe(["climate_data_south"])
 while True:
     msg = c.poll(1.0)
     if msg is None or msg.error():
         continue
     ctx = SerializationContext(msg.topic(), MessageField.VALUE)
-    record = deserialize(msg.value(), ctx)     # -> GeoPoint message
-    print(msg.key().decode("utf-8"), record.nearest_town)
+    record = deserialize(msg.value(), ctx)     # -> ClimateData message
+    print(msg.key().decode("utf-8"), record.data.temperature)
 ```
-
-> For `german_regions` in `avro`/`protobuf`, `geo_coords` comes back as a GeoJSON
-> **string** — `json.loads(record["geo_coords"])` (avro) or
-> `json.loads(record.geo_coords)` (protobuf) to get the geometry object back.
 
 ## Regenerating the Protobuf classes
 
-`schemas/*_pb2.py` are generated from `schemas/*.proto` and committed. After
-editing a `.proto`, regenerate them:
+`schemas/climate_data_pb2.py` is generated from `schemas/climate_data.proto` and
+committed. After editing the `.proto`, regenerate it:
 
 ```bash
 pip install grpcio-tools
 python -m grpc_tools.protoc -Ischemas --python_out=schemas \
-    schemas/geo_point.proto schemas/german_region.proto schemas/climate_data.proto
+    schemas/climate_data.proto
 ```
