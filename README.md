@@ -62,6 +62,43 @@ The `data/` directory contains the reference datasets:
 | [`german_regions.json`](data/german_regions.json) | 16 German states with boundaries, fulltext columns, and embeddings |
 | [`export-demo_climate_data_large_v2.json`](data/export-demo_climate_data_large_v2.json) | Climate measurement readings |
 
+### Loading the data with `COPY FROM`
+
+The same three datasets are published as newline-delimited JSON in a public S3
+bucket, so the quickest way to populate the demo tables is to let CrateDB pull
+them in directly. Run the DDL first so the tables exist, then:
+
+```sql
+COPY demo.geo_points
+  FROM 'https://guided-path.s3.us-east-1.amazonaws.com/geo_points.json'
+  WITH (format = 'json') RETURN SUMMARY;
+
+COPY demo.german_regions
+  FROM 'https://guided-path.s3.us-east-1.amazonaws.com/german_regions.json'
+  WITH (format = 'json') RETURN SUMMARY;
+
+COPY demo.climate_data
+  FROM 'https://guided-path.s3.us-east-1.amazonaws.com/export-demo_climate_data_large_v2.json'
+  WITH (format = 'json') RETURN SUMMARY;
+```
+
+Notes:
+
+- **It runs on the cluster, not your client.** CrateDB fetches each URL
+  server-side, so the *cluster nodes* need outbound network access to S3. The
+  bucket is public, so no credentials are required.
+- **Keys in each JSON object map to table columns.** These files line up with
+  the DDL directly: `geo_location` (`[lon, lat]`) → `GEO_POINT`, `geo_coords`
+  (GeoJSON) → `GEO_SHAPE`, `embedding` (1536-element array) → `FLOAT_VECTOR`,
+  and the ISO-8601 `measurement_time` string → `TIMESTAMP`.
+- **`RETURN SUMMARY`** reports per-node success/error counts so you can confirm
+  all rows landed (726 geo points, 16 regions, and the full climate stream).
+- Run `REFRESH TABLE demo.geo_points, demo.german_regions, demo.climate_data;`
+  afterwards if you want to query the rows immediately.
+
+This is the database-side counterpart to [`src_stream_load/`](src_stream_load/README.md),
+which streams the very same files into Kafka instead.
+
 ## MCP Search (Claude + CrateDB)
 
 A minimal Python [MCP](https://modelcontextprotocol.io) server that exposes a single `query_sql` tool over the weather dataset, so an MCP client like [Claude](https://www.anthropic.com/claude) can answer questions about the data in plain English. It is built on the official MCP Python SDK (`FastMCP`) and talks to CrateDB's HTTP `_sql` endpoint. The one non-trivial rule — using `WITHIN` to keep "in Germany" queries inside the country's borders — is baked into the server's instructions.
