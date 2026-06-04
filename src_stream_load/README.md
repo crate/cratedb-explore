@@ -1,4 +1,4 @@
-# src_stream_load — stream the demo datasets into Kafka
+    # src_stream_load — stream the demo datasets into Kafka
 
 A Python producer that reads the three demo JSON files from S3 and streams them
 into Kafka, encoded as **JSON, Avro, or Protobuf**. Avro and Protobuf register
@@ -11,7 +11,7 @@ The three sources are newline-delimited JSON (one object per line):
 | Source file | Topic | Records | Role |
 | --- | --- | --- | --- |
 | `german_regions.json` | `german_regions` | 16 | reference table — 16 German Länder with GeoJSON geometry, descriptive text, and a 1536-d embedding |
-| `geo_points.json` | `geo_points` | 727 | reference table — weather-station locations |
+| `geo_points.json` | `geo_points` | 726 | reference table — weather-station locations |
 | `export-demo_climate_data_large_v2.json` | `climate_data` | ~265k | fact stream — per-location climate measurements (temperature in **Kelvin**) |
 
 Defaults point at the public S3 bucket

@@ -141,7 +141,7 @@ jdbc:postgresql://<host>:5432/crate?sslmode=<sslmode>
 
 ```
 my-cluster
-Loaded 727 geo points.
+Loaded 726 geo points.
 Loaded 8760 timestamps.
 POINT(13.74999993480742 52.49999997206032) @ 2024-06-15 12:00:00.0 -> min=21.4 max=21.4
 POINT(8.999999966472387 54.24999999348074) @ 2024-02-03 03:00:00.0 -> min=-1.2 max=-1.2

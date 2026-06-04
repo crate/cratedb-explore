@@ -117,7 +117,7 @@ the latest snapshot.
 
 ## Query latencies
 
-Measured against the demo cluster (a 727-station network) over the HTTP `_sql`
+Measured against the demo cluster (a 726-station network) over the HTTP `_sql`
 endpoint — the same request the `query_sql` tool makes. One warm-up call is
 discarded per query; MCP/stdio overhead is negligible next to these.
 

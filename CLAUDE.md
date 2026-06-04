@@ -43,7 +43,7 @@ Load generators read credentials from `CRATE_USER` / `CRATE_PASSWORD` env vars (
 
 - **Load generators** speak the PostgreSQL wire protocol on **port 5432** (Npgsql / psycopg2 / JDBC). DB name is `crate`.
 - **The MCP server** uses CrateDB's **HTTP `_sql` endpoint on port 4200** instead — simpler for tool-use and matches `cratedb-mcp`'s transport. Every HTTP request sends a **`Default-Schema: demo`** header; HTTP is stateless so `SET search_path` doesn't persist across calls.
-- The `demo` schema holds `climate_data` (with `geo_location geo_point`, `measurement_time timestamp`, `data['temperature'] kelvin`), `german_regions` (16 Länder with `geo_coords` polygons and full-text-indexed `economics` / `transportation` / `introduced_species` columns), and `geo_points` (727 weather-station locations with `nearest_town`).
+- The `demo` schema holds `climate_data` (with `geo_location geo_point`, `measurement_time timestamp`, `data['temperature'] kelvin`), `german_regions` (16 Länder with `geo_coords` polygons and full-text-indexed `economics` / `transportation` / `introduced_species` columns), and `geo_points` (726 weather-station locations with `nearest_town`).
 
 ## Critical SQL rules (mirrored in the MCP server's instructions + tool description)
 
