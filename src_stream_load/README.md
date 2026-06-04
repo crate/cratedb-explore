@@ -85,6 +85,82 @@ docker-compose) is the simplest way to exercise the binary formats.
 Exit codes: `0` success · `1` bad argument · `2` source download failed ·
 `3` one or more records failed to deliver.
 
+## Consuming
+
+Message keys are UTF-8 strings in every format; only the value decoding differs.
+The snippets below read the `geo_points` topic — swap the topic name for
+`german_regions` or `climate_data`. Run them from `src_stream_load/` so the
+generated `schemas/*_pb2.py` are importable.
+
+**JSON** — no Schema Registry; the value is just UTF-8 JSON:
+
+```python
+import json
+from confluent_kafka import Consumer
+
+c = Consumer({"bootstrap.servers": "localhost:9092",
+              "group.id": "demo-consumer", "auto.offset.reset": "earliest"})
+c.subscribe(["geo_points"])
+while True:
+    msg = c.poll(1.0)
+    if msg is None or msg.error():
+        continue
+    key = msg.key().decode("utf-8") if msg.key() else None
+    value = json.loads(msg.value())
+    print(key, value["nearest_town"])
+```
+
+**Avro** — the `AvroDeserializer` fetches the writer schema from the registry and
+returns a `dict`:
+
+```python
+from confluent_kafka import Consumer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroDeserializer
+from confluent_kafka.serialization import MessageField, SerializationContext
+
+sr = SchemaRegistryClient({"url": "http://localhost:8081"})
+deserialize = AvroDeserializer(sr)
+
+c = Consumer({"bootstrap.servers": "localhost:9092",
+              "group.id": "demo-consumer", "auto.offset.reset": "earliest"})
+c.subscribe(["geo_points"])
+while True:
+    msg = c.poll(1.0)
+    if msg is None or msg.error():
+        continue
+    ctx = SerializationContext(msg.topic(), MessageField.VALUE)
+    record = deserialize(msg.value(), ctx)     # -> dict
+    print(msg.key().decode("utf-8"), record["nearest_town"])
+```
+
+**Protobuf** — give the `ProtobufDeserializer` the matching generated message
+class; it returns a protobuf object:
+
+```python
+from confluent_kafka import Consumer
+from confluent_kafka.schema_registry.protobuf import ProtobufDeserializer
+from confluent_kafka.serialization import MessageField, SerializationContext
+from schemas.geo_point_pb2 import GeoPoint
+
+deserialize = ProtobufDeserializer(GeoPoint, {"use.deprecated.format": False})
+
+c = Consumer({"bootstrap.servers": "localhost:9092",
+              "group.id": "demo-consumer", "auto.offset.reset": "earliest"})
+c.subscribe(["geo_points"])
+while True:
+    msg = c.poll(1.0)
+    if msg is None or msg.error():
+        continue
+    ctx = SerializationContext(msg.topic(), MessageField.VALUE)
+    record = deserialize(msg.value(), ctx)     # -> GeoPoint message
+    print(msg.key().decode("utf-8"), record.nearest_town)
+```
+
+> For `german_regions` in `avro`/`protobuf`, `geo_coords` comes back as a GeoJSON
+> **string** — `json.loads(record["geo_coords"])` (avro) or
+> `json.loads(record.geo_coords)` (protobuf) to get the geometry object back.
+
 ## Regenerating the Protobuf classes
 
 `schemas/*_pb2.py` are generated from `schemas/*.proto` and committed. After
