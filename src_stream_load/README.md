@@ -43,6 +43,28 @@ Message **keys** are plain UTF-8 strings (`nearest_town`, `region_name`, and
 > can't express. For `avro`/`protobuf` it is stored as a GeoJSON **string**; for
 > `json` it stays a native nested object. Schemas live in `schemas/`.
 
+## Re-running the loader (no broker-side dedup)
+
+Producing to Kafka is **append-only** — unlike the CrateDB tables (which dedup on
+their primary keys, see the [top-level README](../README.md#loading-the-data-with-copy-from)),
+re-running the loader writes another full copy of every record. The broker does
+not reject duplicates.
+
+What the keys give you is the option of **log compaction**:
+
+- `german_regions` and `geo_points` are keyed by a unique entity (`region_name`,
+  `nearest_town`). On a compacted topic the broker keeps only the latest value
+  per key, so reloads converge to one record per entity — effectively idempotent.
+- `climate_data` is keyed by **location only** (`"lon,lat"`), not by its full
+  `(measurement_time, location)` identity, because it's an event stream — many
+  timestamps share a location. **Don't compact it** (that would collapse the
+  series to one reading per location). Its real uniqueness is enforced downstream
+  by the `climate_data` primary key in CrateDB, not by Kafka.
+
+So: re-running is safe (it never corrupts anything) but additive. To start clean,
+delete/recreate the topics; for idempotent reference data, enable compaction on
+the two keyed reference topics.
+
 ## Targeting a different streaming platform
 
 The destination is isolated behind the `StreamSink` interface in `sinks.py`
