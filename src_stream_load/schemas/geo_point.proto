@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package demo.stream_load;
+
+// A weather-station location from geo_points.json.
+message GeoPoint {
+  double latitude = 1;
+  double longitude = 2;
+  repeated double geo_location = 3;  // [longitude, latitude]
+  string nearest_town = 4;
+}

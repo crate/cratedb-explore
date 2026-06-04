@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package demo.stream_load;
+
+// A single climate measurement from export-demo_climate_data_large_v2.json.
+message ClimateData {
+  string measurement_time = 1;       // ISO-8601 timestamp, e.g. 2025-07-01T00:00:00.
+  repeated double geo_location = 2;  // [longitude, latitude]
+
+  message ClimateMeasurement {
+    double temperature = 1;  // Kelvin.
+    double pressure = 2;
+    double v10 = 3;
+    double u10 = 4;
+    double latitude = 5;
+    double longitude = 6;
+  }
+
+  ClimateMeasurement data = 3;
+}

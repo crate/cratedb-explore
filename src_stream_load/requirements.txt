@@ -1,0 +1,10 @@
+# Runtime dependencies for the demo-data Kafka loader.
+# The extras pull in fastavro (Avro), protobuf + googleapis-common-protos
+# (Protobuf), and the Schema Registry client.
+confluent-kafka[avro,protobuf,schemaregistry]>=2.5,<3
+requests>=2.31,<3
+protobuf>=5,<7
+
+# Only needed to regenerate schemas/*_pb2.py from the .proto files:
+#   python -m grpc_tools.protoc -Ischemas --python_out=schemas schemas/*.proto
+# grpcio-tools>=1.60

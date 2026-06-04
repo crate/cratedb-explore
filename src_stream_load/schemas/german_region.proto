@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package demo.stream_load;
+
+// A German Land (state) from german_regions.json.
+message GermanRegion {
+  string region_name = 1;
+  string geo_coords = 2;  // Raw GeoJSON geometry (Polygon or MultiPolygon) as a JSON string.
+  string tourism_info = 3;
+  string transportation = 4;
+  string economics = 5;
+  string introduced_species = 6;
+  repeated double embedding = 7;  // 1536-dimension text embedding.
+}

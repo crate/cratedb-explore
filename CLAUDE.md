@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repo shape
 
-Three functional areas. `src_weather/` and `src_knn_search/` are each implemented three times (Java / Python / .NET) and are intentionally equivalent — when you change behaviour in one, check whether the others need the same change. `src_mcp_search/` is a single minimal Python example (no Java/.NET).
+Four functional areas. `src_weather/` and `src_knn_search/` are each implemented three times (Java / Python / .NET) and are intentionally equivalent — when you change behaviour in one, check whether the others need the same change. `src_mcp_search/` and `src_stream_load/` are each a single minimal Python example (no Java/.NET).
 
 | Area | Purpose | Modules |
 | --- | --- | --- |
 | `src_weather/` | Load generator driving CrateDB over the PostgreSQL wire protocol with a mix of WKT geo-proximity, REGION polygon-join, and FTS `MATCH` queries. Reports latency percentiles via HdrHistogram and writes `latency_histogram.png`. | `main/java`, `main/python`, `main/dotnet` |
 | `src_knn_search/` | Interactive search CLI against `demo.german_regions` — semantic via OpenAI embeddings + `KNN_MATCH`, BM25 via `MATCH`. | `main/java`, `main/python`, `main/dotnet` |
 | `src_mcp_search/` | A minimal MCP server (`FastMCP`, official MCP Python SDK) exposing one `query_sql` tool over the `demo` schema via CrateDB's HTTP `_sql` endpoint. An MCP client (Claude Code / Desktop) connects to it. The only non-trivial rule — use `WITHIN` for "in Germany" questions — lives in the server's instructions + tool description. `GERMAN_WEATHER_MCP.md` is a draft cratedb.com how-to page. | `german_weather_mcp.py` (single file) |
+| `src_stream_load/` | Producer that streams the three demo JSON datasets (from S3) into Kafka as JSON/Avro/Protobuf. Reference tables (`german_regions`, `geo_points`) load first and in full; `climate_data` loads last and is rate-limitable. The destination sits behind a `StreamSink` ABC (`sinks.py`) so a non-Kafka platform can be swapped in. | `stream_load.py`, `sinks.py`, `serializers.py`, `schemas/` |
 
 Shared assets: `sql/` (DDL + DML for the `demo` schema), `data/` (JSON reference data), `grafana/german_weather_data.json` (Grafana dashboard), `doc/` (canonical screenshots referenced from READMEs).
 
@@ -18,7 +19,7 @@ Shared assets: `sql/` (DDL + DML for the `demo` schema), `data/` (JSON reference
 
 **Java** — multi-module Maven from the root:
 ```bash
-mvn compile                                      # builds all three modules
+mvn compile                                      # builds both Java modules (weather + knn_search)
 mvn -pl src_weather/main/java compile            # one module
 cd src_weather/main/java && mvn -q exec:java -Dexec.args="<duration-s> <host> <rps> <sslmode> [TYPE:COUNT ...]"
 ```

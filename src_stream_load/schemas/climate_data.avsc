@@ -1,0 +1,22 @@
+{
+  "type": "record",
+  "name": "ClimateData",
+  "namespace": "demo.stream_load",
+  "doc": "A single climate measurement from export-demo_climate_data_large_v2.json. Temperature is in Kelvin.",
+  "fields": [
+    {"name": "measurement_time", "type": "string", "doc": "ISO-8601 timestamp, e.g. 2025-07-01T00:00:00."},
+    {"name": "geo_location", "type": {"type": "array", "items": "double"}, "doc": "[longitude, latitude]"},
+    {"name": "data", "type": {
+      "type": "record",
+      "name": "ClimateMeasurement",
+      "fields": [
+        {"name": "temperature", "type": "double", "doc": "Kelvin."},
+        {"name": "pressure", "type": "double"},
+        {"name": "v10", "type": "double"},
+        {"name": "u10", "type": "double"},
+        {"name": "latitude", "type": "double"},
+        {"name": "longitude", "type": "double"}
+      ]
+    }}
+  ]
+}
