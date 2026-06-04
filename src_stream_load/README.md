@@ -35,8 +35,12 @@ before the facts that reference them start flowing.
 | `avro` | Confluent Avro | required |
 | `protobuf` | Confluent Protobuf | required |
 
-Message **keys** are plain UTF-8 strings (`nearest_town`, `region_name`, and
-`"lon,lat"` respectively) for stable partitioning.
+Message **keys** are plain UTF-8 strings. The reference topics are keyed by their
+entity identity (= their CrateDB primary key): `"lon,lat"` for `geo_points`,
+`region_name` for `german_regions`. `climate_data` is keyed by `"lon,lat"`
+(location only) — a subset of its identity, since it's an event stream (see
+[Re-running the loader](#re-running-the-loader-no-broker-side-dedup)). `geo_points`
+and `climate_data` share the `"lon,lat"` key space, so they co-partition on location.
 
 > **`geo_coords`:** the German-region geometry is a GeoJSON `Polygon` *or*
 > `MultiPolygon` (different array depths), which a single Avro/Protobuf field
@@ -52,9 +56,12 @@ not reject duplicates.
 
 What the keys give you is the option of **log compaction**:
 
-- `german_regions` and `geo_points` are keyed by a unique entity (`region_name`,
-  `nearest_town`). On a compacted topic the broker keeps only the latest value
-  per key, so reloads converge to one record per entity — effectively idempotent.
+- `german_regions` and `geo_points` are keyed by a unique entity identity
+  (`region_name`; `"lon,lat"` coordinates). On a compacted topic the broker keeps
+  only the latest value per key, so reloads converge to one record per entity —
+  effectively idempotent. (Note `geo_points` is keyed by coordinates, **not** by
+  `nearest_town`, which is non-unique — 10 towns name two stations apiece, so
+  compacting by town would silently drop those stations.)
 - `climate_data` is keyed by **location only** (`"lon,lat"`), not by its full
   `(measurement_time, location)` identity, because it's an event stream — many
   timestamps share a location. **Don't compact it** (that would collapse the

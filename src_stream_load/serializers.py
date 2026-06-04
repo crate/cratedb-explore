@@ -110,7 +110,10 @@ class TopicSpec:
 
 GEO_POINTS = TopicSpec(
     name="geo_points",
-    key_of=lambda r: r["nearest_town"],
+    # Key on the coordinates (the record's identity, = the CrateDB PK), not on
+    # nearest_town, which is a non-unique attribute (10 towns name two stations).
+    # Same "lon,lat" form as climate_data, so the two co-partition on location.
+    key_of=lambda r: f'{r["geo_location"][0]},{r["geo_location"][1]}',
     avsc_file="geo_point.avsc",
     proto_msg=geo_point_pb2.GeoPoint,
     to_avro=lambda r: r,
