@@ -1,4 +1,4 @@
-# src_stream_load — Stream climate_data through Kafka, split by latitude
+# src_stream_load — Stream climate data through Kafka, split by latitude
 
 This example uses the existing tables we loaded earlier. Instead of 
 using [COPY FROM](https://cratedb.com/docs/crate/reference/en/latest/sql/statements/copy-from.html) and 
@@ -30,7 +30,7 @@ Avro, and Protobuf side by side.
   every record into the one **`demo.climate_data`** table over CrateDB's HTTP
   `_sql` endpoint.
 
-## The Bands
+## The Latitude Bands
 
 `climate_data` records carry `geo_location = [longitude, latitude]`. The producer
 routes each record by its **latitude** into one of three bands:
