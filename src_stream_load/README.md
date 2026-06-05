@@ -1,6 +1,6 @@
 # src_stream_load — Stream climate_data through Kafka, split by latitude
 
-TThis example uses the existing tables we loaded earlier. Instead of 
+This example uses the existing tables we loaded earlier. Instead of 
 using [COPY FROM](https://cratedb.com/docs/crate/reference/en/latest/sql/statements/copy-from.html) and 
 an S3 file, we use [Kafka Connect](https://kafka.apache.org/documentation/#connect) to encode the 
 data into three different formats, and then load the weather data table again,
