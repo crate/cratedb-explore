@@ -1,7 +1,24 @@
-# src_stream_load — stream climate_data through Kafka, split by latitude
+# src_stream_load — Stream climate_data through Kafka, split by latitude
 
+TThis example uses the existing tables we loaded earlier. Instead of 
+using [COPY FROM](https://cratedb.com/docs/crate/reference/en/latest/sql/statements/copy-from.html) and 
+an S3 file, we use [Kafka Connect](https://kafka.apache.org/documentation/#connect) to encode the 
+data into three different formats, and then load the weather data table again,
+by reading from three different Kafka topics, each in a different format. 
+
+## Setup
+Before you start you'll need to delete your existing climate data:
+
+```sql
+DELETE FROM demo.climate_data;
+```
+You'll also need access to servers running Kafka (usually port 9092) and 
+Confluent's Kafka Schema Registry, (port 8081). The [schema registry](https://docs.confluent.io/platform/current/schema-registry/index.html) is needed if we
+want to use [Avro](https://avro.apache.org/), or [ProtoBuf](https://protobuf.dev/).
+
+## The code
 Two Python programs move the demo `climate_data` dataset through Kafka and into
-CrateDB. The twist: the single dataset is **split by latitude into three bands**,
+CrateDB. The twist: the single dataset is arbitrarily **split by latitude into three bands**,
 and each band travels in a **different wire format** — so one run exercises JSON,
 Avro, and Protobuf side by side.
 
@@ -11,9 +28,9 @@ Avro, and Protobuf side by side.
 - **`stream_from_kafka_into_crate.py`** — the consumer. Reads all three band
   topics back out of Kafka, deserializes each in its own format, and bulk-loads
   every record into the one **`demo.climate_data`** table over CrateDB's HTTP
-  `_sql` endpoint (creating the table first if it doesn't exist).
+  `_sql` endpoint.
 
-## The bands
+## The Bands
 
 `climate_data` records carry `geo_location = [longitude, latitude]`. The producer
 routes each record by its **latitude** into one of three bands:
@@ -29,7 +46,7 @@ divide it into near-thirds (a 3,000-record sample splits ≈ 831 / 1,014 / 1,155
 south / central / north). Move the boundaries with `--south-max-lat` /
 `--north-min-lat`.
 
-## The data
+## The Data
 
 The source is newline-delimited JSON (one object per line):
 
