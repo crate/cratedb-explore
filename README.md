@@ -124,13 +124,14 @@ See the [MCP Search overview](src_mcp_search/README.md) for install, configurati
 
 ## Grafana Dashboard
 
-The `grafana/` directory contains a pre-built dashboard for visualizing the weather data:
+The `grafana/` directory contains pre-built dashboards for visualizing the data:
 
 | File | Description |
 | ---- | ----------- |
-| [`german_weather_data.json`](grafana/german_weather_data.json) | Importable Grafana dashboard with geomap, gauge, and time-series panels. Connects to CrateDB via the PostgreSQL datasource plugin. |
+| [`german_weather_data.json`](grafana/german_weather_data.json) | Importable Grafana dashboard with geomap, gauge, and time-series panels for the weather data. Connects to CrateDB via the PostgreSQL datasource plugin. |
+| [`real_time_industrial_analytics.json`](grafana/real_time_industrial_analytics.json) | "Real Time Industrial Analytics Dashboard" for the Industrial IoT (`rtia`) schema. Connects to CrateDB via the PostgreSQL datasource plugin. |
 
-To use it, add a PostgreSQL datasource in Grafana pointing at your CrateDB cluster, then import the JSON file via **Dashboards > Import**.
+To use one, add a PostgreSQL datasource in Grafana pointing at your CrateDB cluster, then import the JSON file via **Dashboards > Import**.
 
 ## Prerequisites
 
