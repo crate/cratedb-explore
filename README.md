@@ -9,6 +9,8 @@ This project accompanies the [CrateDB Explore: IoT Analytics](https://cratedb.co
 
 The load generators in this repository let you drive that same dataset with a configurable mix of geo-proximity, multi-table join, and full-text search queries over the PostgreSQL wire protocol. Each implementation produces identical workloads and reports latency percentiles via [HdrHistogram](https://github.com/HdrHistogram/HdrHistogram).
 
+The repository also contains a second, self-contained scenario — **[Real Time Industrial Analytics (RTIA)](#real-time-industrial-analytics-rtia)** — a SQL-and-dashboard walkthrough over a fictional fleet of German factories (plants, devices, maintenance logs, and live sensor readings in the `rtia` schema). It reuses the same CrateDB techniques — geo containment, full-text `MATCH`, and vector `KNN_MATCH` — against industrial data instead of weather. Everything from here down to the Grafana dashboard covers the **weather** demo; RTIA has its own section near the end.
+
 ## Weather Load Generators
 
 | Language | Directory | Driver |
@@ -53,10 +55,6 @@ The `sql/` directory contains the DDL and DML needed to set up the demo tables:
 | ---- | ----------- |
 | [`german_weather_data_ddl.sql`](sql/german_weather_data_ddl.sql) | `CREATE TABLE` statements for `climate_data`, `german_regions`, and `geo_points` |
 | [`german_weather_data_dml.sql`](sql/german_weather_data_dml.sql) | `COPY FROM` and `INSERT` statements to load reference data |
-| [`rtia_schema_create.sql`](sql/rtia_schema_create.sql) | Industrial IoT schema: `CREATE TABLE` + `COPY FROM` for the `rtia` plants, devices, maintenance_log, iot_data, locations, and knn_searches |
-| [`rtia_first_queries.sql`](sql/rtia_first_queries.sql) | Industrial IoT introductory queries |
-| [`rtia_advanced_queries.sql`](sql/rtia_advanced_queries.sql) | Industrial IoT geo (`DISTANCE`/`WITHIN`) and vector-search (`KNN_MATCH`) queries |
-| [`rtia_schema_delete.sql`](sql/rtia_schema_delete.sql) | `DROP TABLE` statements to tear down the `rtia` schema |
 
 The `data/` directory contains the reference datasets:
 
@@ -129,9 +127,27 @@ The `grafana/` directory contains pre-built dashboards for visualizing the data:
 | File | Description |
 | ---- | ----------- |
 | [`german_weather_data.json`](grafana/german_weather_data.json) | Importable Grafana dashboard with geomap, gauge, and time-series panels for the weather data. Connects to CrateDB via the PostgreSQL datasource plugin. |
-| [`rtia.json`](grafana/rtia.json) | "Real Time Industrial Analytics Dashboard" for the Industrial IoT (`rtia`) schema. Connects to CrateDB via the PostgreSQL datasource plugin. |
 
 To use one, add a PostgreSQL datasource in Grafana pointing at your CrateDB cluster, then import the JSON file via **Dashboards > Import**.
+
+## Real Time Industrial Analytics (RTIA)
+
+A second, self-contained demo scenario that applies the same CrateDB techniques to **industrial** data instead of weather. It models a small fleet of German factories — five plants, their devices, a maintenance log, and a stream of sensor readings — in the `rtia` schema, and walks through the queries an operations team would run against them: status distribution, fault-rate trends, OEE approximation, maintenance cost, geo-proximity, full-text incident search, and semantic search over maintenance notes.
+
+Unlike the weather demo, RTIA has **no load generator** — it is delivered entirely as SQL scripts plus a Grafana dashboard. The data is pulled straight from a public S3 bucket by the `COPY FROM` statements in the schema script, so there is nothing to load by hand. Run the four scripts in order:
+
+| File | Description |
+| ---- | ----------- |
+| [`rtia_schema_create.sql`](sql/rtia_schema_create.sql) | Creates the `rtia` tables (`plants`, `devices`, `maintenance_log`, `iot_data`, `locations`, `knn_searches`) and loads them with `COPY FROM` against the public S3 dataset. |
+| [`rtia_first_queries.sql`](sql/rtia_first_queries.sql) | Introductory analytics — ingest check, status distribution, fault rate by device type, hourly fault trend, alert density per plant, maintenance cost, and an OEE approximation. |
+| [`rtia_advanced_queries.sql`](sql/rtia_advanced_queries.sql) | Advanced patterns — geo (`DISTANCE`/`WITHIN`), full-text `MATCH` on maintenance notes, vector `KNN_MATCH` semantic search, and a hybrid vector + full-text combined score. |
+| [`rtia_schema_delete.sql`](sql/rtia_schema_delete.sql) | `DROP TABLE` statements to tear the scenario down. |
+
+The maintenance-note vectors are 384-dimension `FLOAT_VECTOR` embeddings (sentence-transformers `all-MiniLM-L6-v2`), queried with `KNN_MATCH` for semantic search and combined with `MATCH` for hybrid relevance.
+
+### Dashboard
+
+[`grafana/rtia.json`](grafana/rtia.json) is the **"Real Time Industrial Analytics Dashboard"** — summary KPIs, critical-event tracking, device-level detail, maintenance cost by plant, OEE, KNN searches, full-text search, and geospatial panels over the `rtia` schema. Import it the same way as the weather dashboard: add a PostgreSQL datasource pointing at your CrateDB cluster, then **Dashboards > Import**.
 
 ## Prerequisites
 
