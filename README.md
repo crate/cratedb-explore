@@ -53,6 +53,10 @@ The `sql/` directory contains the DDL and DML needed to set up the demo tables:
 | ---- | ----------- |
 | [`german_weather_data_ddl.sql`](sql/german_weather_data_ddl.sql) | `CREATE TABLE` statements for `climate_data`, `german_regions`, and `geo_points` |
 | [`german_weather_data_dml.sql`](sql/german_weather_data_dml.sql) | `COPY FROM` and `INSERT` statements to load reference data |
+| [`rtia_schema_create.sql`](sql/rtia_schema_create.sql) | Industrial IoT schema: `CREATE TABLE` + `COPY FROM` for the `rtia` plants, devices, maintenance_log, iot_data, locations, and knn_searches |
+| [`rtia_first_queries.sql`](sql/rtia_first_queries.sql) | Industrial IoT introductory queries |
+| [`rtia_advanced_queries.sql`](sql/rtia_advanced_queries.sql) | Industrial IoT geo (`DISTANCE`/`WITHIN`) and vector-search (`KNN_MATCH`) queries |
+| [`rtia_schema_delete.sql`](sql/rtia_schema_delete.sql) | `DROP TABLE` statements to tear down the `rtia` schema |
 
 The `data/` directory contains the reference datasets:
 
