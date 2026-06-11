@@ -4971,7 +4971,7 @@
           {
             "kind": "RowsLayoutRow",
             "spec": {
-              "title": "Device Level Infomation",
+              "title": "Device Level Information",
               "collapse": false,
               "layout": {
                 "kind": "GridLayout",
@@ -5169,7 +5169,7 @@
           {
             "kind": "RowsLayoutRow",
             "spec": {
-              "title": "ANALYTICAL PATTERNS",
+              "title": "Analytical Patterns",
               "collapse": true,
               "layout": {
                 "kind": "GridLayout",
@@ -5288,7 +5288,7 @@
           {
             "kind": "RowsLayoutRow",
             "spec": {
-              "title": "GEOSPATIAL",
+              "title": "Geospatial",
               "collapse": true,
               "layout": {
                 "kind": "GridLayout",
