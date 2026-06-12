@@ -145,6 +145,8 @@ Unlike the weather demo, RTIA has **no load generator** — it is delivered enti
 
 The maintenance-note vectors are 384-dimension `FLOAT_VECTOR` embeddings (sentence-transformers `all-MiniLM-L6-v2`), queried with `KNN_MATCH` for semantic search and combined with `MATCH` for hybrid relevance.
 
+`iot_data` is stored in the Telegraf line-protocol shape — `hash_id`, `timestamp`, `name`, a `tags` `OBJECT` for the string dimensions (`tags['device_id']`, `tags['status']`, `tags['plant_id']`, the flattened `tags['metadata_*']`, …) and a `fields` `OBJECT` for the numeric measurements (`fields['metric_value']`, `fields['quality_score']`). The geo coordinates ride along as plain doubles (`fields['geo_lon']` / `fields['geo_lat']`) and `geo_location` is a `GEO_POINT` `GENERATED` from them. That shape lets the same table be populated either by the `COPY FROM` in the schema script or by Telegraf's `outputs.cratedb` (postgres/crate) plugin, which can't write a `GEO_POINT` directly — so the query scripts and dashboard reach into the objects with `tags['…']` / `fields['…']` bracket notation.
+
 ### Dashboard
 
 [`grafana/rtia.json`](grafana/rtia.json) is the **"Real Time Industrial Analytics Dashboard"** — summary KPIs, critical-event tracking, device-level detail, maintenance cost by plant, OEE, KNN searches, full-text search, and geospatial panels over the `rtia` schema. Import it the same way as the weather dashboard: add a PostgreSQL datasource pointing at your CrateDB cluster, then **Dashboards > Import**.

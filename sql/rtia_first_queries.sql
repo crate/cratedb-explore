@@ -21,6 +21,12 @@
 -- CrateDB Industrial IoT — First Queries
 -- Dataset: 5 German plants · 500 devices · 500,000 sensor readings
 -- Tables:  iot_data · plants · devices · maintenance_log
+--
+-- iot_data is stored in the Telegraf line-protocol shape: the string dimensions
+-- live in the `tags` OBJECT (tags['device_id'], tags['status'], tags['plant_id'],
+-- the flattened tags['metadata_*'], …) and the numeric measurements in `fields`
+-- (fields['metric_value'], fields['quality_score']). geo_location is a GEO_POINT
+-- GENERATED from fields['geo_lon'] / fields['geo_lat'].
 -- ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -29,8 +35,8 @@
 
 SELECT
     COUNT(*)                                    AS total_readings,
-    COUNT(DISTINCT device_id)                   AS devices,
-    COUNT(DISTINCT plant_id)                    AS plants,
+    COUNT(DISTINCT tags['device_id'])           AS devices,
+    COUNT(DISTINCT tags['plant_id'])            AS plants,
     MIN("timestamp")                            AS earliest,
     MAX("timestamp")                            AS latest
 FROM rtia.iot_data;
@@ -40,11 +46,11 @@ FROM rtia.iot_data;
 -- How healthy is the fleet right now?
 
 SELECT
-    status,
+    tags['status']                              AS status,
     COUNT(*)                                    AS readings,
     ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS pct
 FROM rtia.iot_data
-GROUP BY status
+GROUP BY tags['status']
 ORDER BY readings DESC;
 
 
@@ -52,13 +58,13 @@ ORDER BY readings DESC;
 -- Which sensor category generates the most alerts?
 
 SELECT
-    device_type,
+    tags['device_type']                                    AS device_type,
     COUNT(*)                                                AS total,
-    COUNT(*) FILTER (WHERE status = 'warning')             AS warnings,
-    COUNT(*) FILTER (WHERE status = 'critical')            AS criticals,
-    ROUND(AVG(quality_score), 1)                           AS avg_quality
+    COUNT(*) FILTER (WHERE tags['status'] = 'warning')     AS warnings,
+    COUNT(*) FILTER (WHERE tags['status'] = 'critical')    AS criticals,
+    ROUND(AVG(fields['quality_score']), 1)                 AS avg_quality
 FROM rtia.iot_data
-GROUP BY device_type
+GROUP BY tags['device_type']
 ORDER BY criticals DESC;
 
 
@@ -66,8 +72,8 @@ ORDER BY criticals DESC;
 -- Critical events per hour — spot operational patterns
 
 SELECT
-    DATE_TRUNC('hour', "timestamp")             AS hour,
-    COUNT(*) FILTER (WHERE status = 'critical') AS critical_count
+    DATE_TRUNC('hour', "timestamp")                     AS hour,
+    COUNT(*) FILTER (WHERE tags['status'] = 'critical') AS critical_count
 FROM rtia.iot_data
 GROUP BY hour
 ORDER BY hour;
@@ -77,12 +83,12 @@ ORDER BY hour;
 -- Where on the map are faults clustering?
 
 SELECT
-    plant_id,
-    ANY_VALUE(geo_location)                     AS location,
-    COUNT(*) FILTER (WHERE status = 'critical') AS critical_readings,
-    ROUND(AVG(quality_score), 1)                AS avg_quality
+    tags['plant_id']                                    AS plant_id,
+    ANY_VALUE(geo_location)                             AS location,
+    COUNT(*) FILTER (WHERE tags['status'] = 'critical') AS critical_readings,
+    ROUND(AVG(fields['quality_score']), 1)              AS avg_quality
 FROM rtia.iot_data
-GROUP BY plant_id
+GROUP BY tags['plant_id']
 ORDER BY critical_readings DESC;
 
 
@@ -93,11 +99,11 @@ SELECT
     p.industry_segment,
     p.plant_name,
     p.employee_count,
-    COUNT(*) FILTER (WHERE i.status = 'critical') AS critical_events,
-    COUNT(*) FILTER (WHERE i.status = 'warning')  AS warning_events,
-    ROUND(AVG(i.quality_score), 1)                AS avg_quality
+    COUNT(*) FILTER (WHERE i.tags['status'] = 'critical') AS critical_events,
+    COUNT(*) FILTER (WHERE i.tags['status'] = 'warning')  AS warning_events,
+    ROUND(AVG(i.fields['quality_score']), 1)              AS avg_quality
 FROM rtia.iot_data i
-JOIN rtia.plants p ON i.plant_id = p.plant_id
+JOIN rtia.plants p ON i.tags['plant_id'] = p.plant_id
 GROUP BY p.industry_segment, p.plant_name, p.employee_count
 ORDER BY critical_events DESC;
 
@@ -114,8 +120,8 @@ SELECT
     COUNT(*)           AS critical_readings,
     MAX(i."timestamp") AS last_critical_at
 FROM rtia.iot_data i
-JOIN rtia.devices d ON i.device_id = d.device_id
-WHERE i.status = 'critical'
+JOIN rtia.devices d ON i.tags['device_id'] = d.device_id
+WHERE i.tags['status'] = 'critical'
   AND d.warranty_expiry < TIMESTAMP '2025-09-01'
 GROUP BY d.device_id, d.manufacturer, d.device_type, d.warranty_expiry, d.asset_value_eur
 ORDER BY critical_readings DESC
@@ -131,9 +137,9 @@ SELECT
     d.plant_id,
     d.responsible_technician,
     d.next_maintenance_due,
-    COUNT(*) FILTER (WHERE i.status IN ('warning', 'critical')) AS fault_readings
+    COUNT(*) FILTER (WHERE i.tags['status'] IN ('warning', 'critical')) AS fault_readings
 FROM rtia.iot_data i
-JOIN rtia.devices d ON i.device_id = d.device_id
+JOIN rtia.devices d ON i.tags['device_id'] = d.device_id
 WHERE d.next_maintenance_due < TIMESTAMP '2025-09-01'
 GROUP BY d.device_id, d.device_type, d.plant_id, d.responsible_technician, d.next_maintenance_due
 ORDER BY fault_readings DESC
@@ -144,7 +150,7 @@ LIMIT 15;
 -- iot_data + devices + maintenance_log  →  maintenance that did not hold
 
 SELECT
-    i.device_id,
+    i.tags['device_id'] AS device_id,
     d.manufacturer,
     d.device_type,
     m.maintenance_type,
@@ -152,30 +158,32 @@ SELECT
     m.cost_eur,
     COUNT(*) AS fault_readings_after_service
 FROM rtia.iot_data i
-JOIN rtia.devices d          ON i.device_id = d.device_id
-JOIN rtia.maintenance_log m  ON i.device_id = m.device_id
-WHERE i.status IN ('warning', 'critical')
+JOIN rtia.devices d          ON i.tags['device_id'] = d.device_id
+JOIN rtia.maintenance_log m  ON i.tags['device_id'] = m.device_id
+WHERE i.tags['status'] IN ('warning', 'critical')
   AND m.status = 'completed'
   AND i."timestamp" > m.completed_date::TIMESTAMP
-GROUP BY i.device_id, d.manufacturer, d.device_type,
+GROUP BY i.tags['device_id'], d.manufacturer, d.device_type,
          m.maintenance_type, m.completed_date, m.cost_eur
 ORDER BY fault_readings_after_service DESC
 LIMIT 10;
 
 
 -- ── 11. OBJECT FIELD ACCESS: FAULT RATE BY FIRMWARE VERSION ─────────────────
--- Demonstrates bracket notation on the metadata OBJECT column.
+-- Demonstrates bracket notation on the tags OBJECT column. Telegraf flattens the
+-- per-device metadata into tags['metadata_*'] (it can only carry flat strings),
+-- so the firmware/model dimensions live there.
 -- Surfaces whether a specific firmware release correlates with higher fault rates.
 
 SELECT
-    metadata['firmware_version']                              AS firmware_version,
-    metadata['model']                                         AS model,
+    tags['metadata_firmware_version']                         AS firmware_version,
+    tags['metadata_model']                                    AS model,
     COUNT(*)                                                  AS total_readings,
-    COUNT(*) FILTER (WHERE status = 'critical')               AS critical_count,
-    COUNT(*) FILTER (WHERE status = 'warning')                AS warning_count,
-    ROUND(AVG(quality_score), 1)                              AS avg_quality
+    COUNT(*) FILTER (WHERE tags['status'] = 'critical')       AS critical_count,
+    COUNT(*) FILTER (WHERE tags['status'] = 'warning')        AS warning_count,
+    ROUND(AVG(fields['quality_score']), 1)                    AS avg_quality
 FROM rtia.iot_data
-GROUP BY metadata['firmware_version'], metadata['model']
+GROUP BY tags['metadata_firmware_version'], tags['metadata_model']
 ORDER BY critical_count DESC
 LIMIT 20;
 
@@ -186,14 +194,14 @@ LIMIT 20;
 
 SELECT
     DATE_BIN('15 minutes'::INTERVAL, "timestamp", TIMESTAMP '2025-09-01') AS window_start,
-    device_type,
-    COUNT(*)                                                 AS readings,
-    COUNT(*) FILTER (WHERE status = 'critical')              AS criticals,
-    ROUND(AVG(metric_value), 2)                              AS avg_value
+    tags['device_type']                                     AS device_type,
+    COUNT(*)                                                AS readings,
+    COUNT(*) FILTER (WHERE tags['status'] = 'critical')     AS criticals,
+    ROUND(AVG(fields['metric_value']), 2)                   AS avg_value
 FROM rtia.iot_data
 WHERE "timestamp" >= TIMESTAMP '2025-09-01 06:00:00'
   AND "timestamp" <  TIMESTAMP '2025-09-01 14:00:00'
-GROUP BY window_start, device_type
+GROUP BY window_start, tags['device_type']
 ORDER BY window_start, device_type;
 
 
@@ -225,29 +233,29 @@ ORDER BY total_cost_eur DESC;
 --   OEE          = Availability × Performance × Quality × 100
 
 SELECT
-    i.plant_id,
+    i.tags['plant_id']                                               AS plant_id,
     p.plant_name,
     p.industry_segment,
-    i.device_type,
+    i.tags['device_type']                                           AS device_type,
     COUNT(*)                                                         AS total_readings,
     ROUND(
-        COUNT(*) FILTER (WHERE i.status != 'offline') * 100.0
+        COUNT(*) FILTER (WHERE i.tags['status'] != 'offline') * 100.0
         / NULLIF(COUNT(*), 0), 1
     )                                                                AS availability_pct,
     ROUND(
-        COUNT(*) FILTER (WHERE i.status = 'normal') * 100.0
-        / NULLIF(COUNT(*) FILTER (WHERE i.status != 'offline'), 0), 1
+        COUNT(*) FILTER (WHERE i.tags['status'] = 'normal') * 100.0
+        / NULLIF(COUNT(*) FILTER (WHERE i.tags['status'] != 'offline'), 0), 1
     )                                                                AS performance_pct,
     ROUND(
-        AVG(i.quality_score) FILTER (WHERE i.status != 'offline'), 1
+        AVG(i.fields['quality_score']) FILTER (WHERE i.tags['status'] != 'offline'), 1
     )                                                                AS quality_score_avg,
     ROUND(
-          (COUNT(*) FILTER (WHERE i.status != 'offline')    * 1.0 / NULLIF(COUNT(*), 0))
-        * (COUNT(*) FILTER (WHERE i.status = 'normal')      * 1.0 / NULLIF(COUNT(*) FILTER (WHERE i.status != 'offline'), 0))
-        * (AVG(i.quality_score) FILTER (WHERE i.status != 'offline') / 100.0)
+          (COUNT(*) FILTER (WHERE i.tags['status'] != 'offline')    * 1.0 / NULLIF(COUNT(*), 0))
+        * (COUNT(*) FILTER (WHERE i.tags['status'] = 'normal')      * 1.0 / NULLIF(COUNT(*) FILTER (WHERE i.tags['status'] != 'offline'), 0))
+        * (AVG(i.fields['quality_score']) FILTER (WHERE i.tags['status'] != 'offline') / 100.0)
         * 100, 1
     )                                                                AS oee_approx_pct
 FROM rtia.iot_data i
-JOIN rtia.plants p ON i.plant_id = p.plant_id
-GROUP BY i.plant_id, p.plant_name, p.industry_segment, i.device_type
+JOIN rtia.plants p ON i.tags['plant_id'] = p.plant_id
+GROUP BY i.tags['plant_id'], p.plant_name, p.industry_segment, i.tags['device_type']
 ORDER BY oee_approx_pct ASC;
