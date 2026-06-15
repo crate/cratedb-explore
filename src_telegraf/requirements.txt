@@ -1,0 +1,4 @@
+# Runtime dependency for replay_to_telegraf.py — POSTs the IoT dataset to a
+# Telegraf http_listener_v2 endpoint, which writes to CrateDB via outputs.cratedb.
+# Telegraf itself is a separate binary (see TELEGRAF_GUIDE.md Prerequisites).
+requests>=2.31,<3

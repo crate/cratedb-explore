@@ -53,7 +53,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    status,\n    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS pct\nFROM rtia.iot_data\nWHERE $__timeFilter(\"timestamp\") \nGROUP BY status\nORDER BY status DESC;",
+                        "rawSql": "SELECT\n    tags['status'] AS status,\n    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS pct\nFROM rtia.iot_data\nWHERE $__timeFilter(\"timestamp\") \nGROUP BY tags['status']\nORDER BY tags['status'] DESC;",
                         "sql": {
                           "columns": [
                             {
@@ -168,7 +168,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    EXTRACT(DOW FROM \"timestamp\") AS day_of_week_number,\n    date_format('%a', \"timestamp\") AS day_of_week,\n    COUNT(*) FILTER (WHERE status = 'critical') AS \"Critical Error Count\"\nFROM rtia.iot_data\nWHERE  $__timeFilter(\"timestamp\") \nGROUP BY day_of_week,day_of_week_number\nORDER BY day_of_week_number;",
+                        "rawSql": "SELECT\n    EXTRACT(DOW FROM \"timestamp\") AS day_of_week_number,\n    date_format('%a', \"timestamp\") AS day_of_week,\n    COUNT(*) FILTER (WHERE tags['status'] = 'critical') AS \"Critical Error Count\"\nFROM rtia.iot_data\nWHERE  $__timeFilter(\"timestamp\") \nGROUP BY day_of_week,day_of_week_number\nORDER BY day_of_week_number;",
                         "sql": {
                           "columns": [
                             {
@@ -311,7 +311,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    d.device_id AS \"Device ID\",\n    d.manufacturer AS \"Manufacturer\",\n    d.device_type AS \"Device Type\",\n    d.warranty_expiry AS \"Warranty Expiry\",\n    d.asset_value_eur AS \"Asset Value €\",\n    COUNT(*)           AS \"Critical Readings\",\n    MAX(i.\"timestamp\") AS \"Last Critical at\"\nFROM rtia.iot_data i\nJOIN rtia.devices d ON i.device_id = d.device_id\nWHERE i.status = 'critical'\n  AND d.warranty_expiry < TIMESTAMP '2025-09-01'\nGROUP BY d.device_id, d.manufacturer, d.device_type, d.warranty_expiry, d.asset_value_eur\nORDER BY \"Critical Readings\" DESC\nLIMIT 15;",
+                        "rawSql": "SELECT\n    d.device_id AS \"Device ID\",\n    d.manufacturer AS \"Manufacturer\",\n    d.device_type AS \"Device Type\",\n    d.warranty_expiry AS \"Warranty Expiry\",\n    d.asset_value_eur AS \"Asset Value €\",\n    COUNT(*)           AS \"Critical Readings\",\n    MAX(i.\"timestamp\") AS \"Last Critical at\"\nFROM rtia.iot_data i\nJOIN rtia.devices d ON i.tags['device_id'] = d.device_id\nWHERE i.tags['status'] = 'critical'\n  AND d.warranty_expiry < TIMESTAMP '2025-09-01'\nGROUP BY d.device_id, d.manufacturer, d.device_type, d.warranty_expiry, d.asset_value_eur\nORDER BY \"Critical Readings\" DESC\nLIMIT 15;",
                         "sql": {
                           "columns": [
                             {
@@ -416,7 +416,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    d.device_id AS \"Device ID\",\n    d.device_type AS \"Device Type\",\n    initcap(replace(d.plant_id,'PLANT_','')) AS \"Plant ID\",\n    d.responsible_technician AS \"Responsible Technician\",\n    d.next_maintenance_due AS \"Next Maintenance Due\",\n    COUNT(*) FILTER (WHERE i.status IN ('warning', 'critical')) AS \"Fault Readings\"\nFROM rtia.iot_data i\nJOIN rtia.devices d ON i.device_id = d.device_id\nWHERE d.next_maintenance_due < TIMESTAMP '2025-09-01'\nGROUP BY d.device_id, d.device_type, d.plant_id, d.responsible_technician, d.next_maintenance_due\nORDER BY \"Fault Readings\" DESC\nLIMIT 15;",
+                        "rawSql": "SELECT\n    d.device_id AS \"Device ID\",\n    d.device_type AS \"Device Type\",\n    initcap(replace(d.plant_id,'PLANT_','')) AS \"Plant ID\",\n    d.responsible_technician AS \"Responsible Technician\",\n    d.next_maintenance_due AS \"Next Maintenance Due\",\n    COUNT(*) FILTER (WHERE i.tags['status'] IN ('warning', 'critical')) AS \"Fault Readings\"\nFROM rtia.iot_data i\nJOIN rtia.devices d ON i.tags['device_id'] = d.device_id\nWHERE d.next_maintenance_due < TIMESTAMP '2025-09-01'\nGROUP BY d.device_id, d.device_type, d.plant_id, d.responsible_technician, d.next_maintenance_due\nORDER BY \"Fault Readings\" DESC\nLIMIT 15;",
                         "sql": {
                           "columns": [
                             {
@@ -515,7 +515,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    i.device_id AS \"Device ID\",\n    d.manufacturer AS \"Manufacturer\",\n    d.device_type AS \"Device Type\",\n    m.maintenance_type AS \"Maintenance Type\",\n    m.completed_date AS \"Completed Date\",\n    m.cost_eur AS \"Cost €\",\n    COUNT(*) AS \"Fault Readings After Service\"\nFROM rtia.iot_data i\nJOIN rtia.devices d          ON i.device_id = d.device_id\nJOIN rtia.maintenance_log m  ON i.device_id = m.device_id\nWHERE i.status IN ('warning', 'critical')\n  AND m.status = 'completed'\n  AND i.\"timestamp\" > m.completed_date::TIMESTAMP\nGROUP BY i.device_id, d.manufacturer, d.device_type,\n         m.maintenance_type, m.completed_date, m.cost_eur\nORDER BY \"Fault Readings After Service\" DESC\nLIMIT 10;",
+                        "rawSql": "SELECT\n    i.tags['device_id'] AS \"Device ID\",\n    d.manufacturer AS \"Manufacturer\",\n    d.device_type AS \"Device Type\",\n    m.maintenance_type AS \"Maintenance Type\",\n    m.completed_date AS \"Completed Date\",\n    m.cost_eur AS \"Cost €\",\n    COUNT(*) AS \"Fault Readings After Service\"\nFROM rtia.iot_data i\nJOIN rtia.devices d          ON i.tags['device_id'] = d.device_id\nJOIN rtia.maintenance_log m  ON i.tags['device_id'] = m.device_id\nWHERE i.tags['status'] IN ('warning', 'critical')\n  AND m.status = 'completed'\n  AND i.\"timestamp\" > m.completed_date::TIMESTAMP\nGROUP BY i.tags['device_id'], d.manufacturer, d.device_type,\n         m.maintenance_type, m.completed_date, m.cost_eur\nORDER BY \"Fault Readings After Service\" DESC\nLIMIT 10;",
                         "sql": {
                           "columns": [
                             {
@@ -614,7 +614,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    metadata['firmware_version']                              AS \"Firmware Version\",\n    metadata['model']                                         AS Model,\n    COUNT(*)                                                  AS \"Total Readings\",\n    COUNT(*) FILTER (WHERE status = 'critical')               AS \"Critical Count\",\n    COUNT(*) FILTER (WHERE status = 'warning')                AS \"Warning Count\",\n    ROUND(AVG(quality_score), 1)                              AS \"Avg Quality\"\nFROM rtia.iot_data\nGROUP BY metadata['firmware_version'], metadata['model']\nORDER BY \"Critical Count\" DESC\nLIMIT 20;",
+                        "rawSql": "SELECT\n    tags['metadata_firmware_version']                              AS \"Firmware Version\",\n    tags['metadata_model']                                         AS Model,\n    COUNT(*)                                                  AS \"Total Readings\",\n    COUNT(*) FILTER (WHERE tags['status'] = 'critical')               AS \"Critical Count\",\n    COUNT(*) FILTER (WHERE tags['status'] = 'warning')                AS \"Warning Count\",\n    ROUND(AVG(fields['quality_score']), 1)                              AS \"Avg Quality\"\nFROM rtia.iot_data\nGROUP BY tags['metadata_firmware_version'], tags['metadata_model']\nORDER BY \"Critical Count\" DESC\nLIMIT 20;",
                         "sql": {
                           "columns": [
                             {
@@ -1271,7 +1271,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    p.plant_name AS \"Plant Name\",\n    p.industry_segment AS \"Industry Segment\",\n    i.device_type AS \"Device Type\",\n    COUNT(*)                                                         AS \"Total Readings\",\n    ROUND(\n        COUNT(*) FILTER (WHERE i.status != 'offline') * 100.0\n        / NULLIF(COUNT(*), 0), 1\n    )                                                                AS \"Availability %\",\n    ROUND(\n        COUNT(*) FILTER (WHERE i.status = 'normal') * 100.0\n        / NULLIF(COUNT(*) FILTER (WHERE i.status != 'offline'), 0), 1\n    )                                                                AS \"Performance %\",\n    ROUND(\n        AVG(i.quality_score) FILTER (WHERE i.status != 'offline'), 1\n    )                                                                AS \"Quality Score Avg\",\n    ROUND(\n          (COUNT(*) FILTER (WHERE i.status != 'offline')    * 1.0 / NULLIF(COUNT(*), 0))\n        * (COUNT(*) FILTER (WHERE i.status = 'normal')      * 1.0 / NULLIF(COUNT(*) FILTER (WHERE i.status != 'offline'), 0))\n        * (AVG(i.quality_score) FILTER (WHERE i.status != 'offline') / 100.0)\n        * 100, 1\n    )                                                                AS \"Oee Approx %\"\nFROM rtia.iot_data i\nJOIN rtia.plants p ON i.plant_id = p.plant_id\nWHERE $__timeFilter(i.\"timestamp\") \nGROUP BY i.plant_id, p.plant_name, p.industry_segment, i.device_type\nORDER BY \"Oee Approx %\" ASC;",
+                        "rawSql": "SELECT\n    p.plant_name AS \"Plant Name\",\n    p.industry_segment AS \"Industry Segment\",\n    i.tags['device_type'] AS \"Device Type\",\n    COUNT(*)                                                         AS \"Total Readings\",\n    ROUND(\n        COUNT(*) FILTER (WHERE i.tags['status'] != 'offline') * 100.0\n        / NULLIF(COUNT(*), 0), 1\n    )                                                                AS \"Availability %\",\n    ROUND(\n        COUNT(*) FILTER (WHERE i.tags['status'] = 'normal') * 100.0\n        / NULLIF(COUNT(*) FILTER (WHERE i.tags['status'] != 'offline'), 0), 1\n    )                                                                AS \"Performance %\",\n    ROUND(\n        AVG(i.fields['quality_score']) FILTER (WHERE i.tags['status'] != 'offline'), 1\n    )                                                                AS \"Quality Score Avg\",\n    ROUND(\n          (COUNT(*) FILTER (WHERE i.tags['status'] != 'offline')    * 1.0 / NULLIF(COUNT(*), 0))\n        * (COUNT(*) FILTER (WHERE i.tags['status'] = 'normal')      * 1.0 / NULLIF(COUNT(*) FILTER (WHERE i.tags['status'] != 'offline'), 0))\n        * (AVG(i.fields['quality_score']) FILTER (WHERE i.tags['status'] != 'offline') / 100.0)\n        * 100, 1\n    )                                                                AS \"Oee Approx %\"\nFROM rtia.iot_data i\nJOIN rtia.plants p ON i.tags['plant_id'] = p.plant_id\nWHERE $__timeFilter(i.\"timestamp\") \nGROUP BY i.tags['plant_id'], p.plant_name, p.industry_segment, i.tags['device_type']\nORDER BY \"Oee Approx %\" ASC;",
                         "sql": {
                           "columns": [
                             {
@@ -1370,7 +1370,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    initcap(replace(device_type, '_', ' ')) AS device_type,\n    COUNT(*)                                                AS total\nFROM rtia.iot_data\nWHERE status = 'warning'\nAND $__timeFilter(\"timestamp\") \nGROUP BY device_type\nORDER BY device_type DESC;",
+                        "rawSql": "SELECT\n    initcap(replace(tags['device_type'], '_', ' ')) AS device_type,\n    COUNT(*)                                                AS total\nFROM rtia.iot_data\nWHERE tags['status'] = 'warning'\nAND $__timeFilter(\"timestamp\") \nGROUP BY tags['device_type']\nORDER BY device_type DESC;",
                         "sql": {
                           "columns": [
                             {
@@ -1705,7 +1705,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n      device_id As \"Device ID\",\n      initcap(replace(device_type, '_',' '))  As \"Device Type\",\n      initcap(replace(plant_id, 'PLANT_','')) AS \"Plant ID\",\n      ROUND(avg_recent, 2) AS \"Avg - Latest 6 hrs\",\n      ROUND(avg_prior,  2) AS \"Avg - Prior 6 hrs\",\n      ROUND(avg_recent - avg_prior, 2) AS \"Abolute Delta\",\n      ROUND((avg_recent - avg_prior) / NULLIF(avg_prior, 0) * 100, 1) AS \"% Change\"\n  FROM (\n      SELECT\n          device_id,\n          device_type,\n          plant_id,\n          AVG(CASE WHEN \"timestamp\" >= TIMESTAMP '2025-09-07 06:00:00'\n                    AND \"timestamp\" <  TIMESTAMP '2025-09-07 12:00:00'\n                   THEN metric_value END) AS avg_recent,\n          AVG(CASE WHEN \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00'\n                    AND \"timestamp\" <  TIMESTAMP '2025-09-07 06:00:00'\n                   THEN metric_value END) AS avg_prior\n      FROM rtia.iot_data\n      WHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00'\n        AND \"timestamp\" <  TIMESTAMP '2025-09-07 12:00:00'\n      GROUP BY device_id, device_type, plant_id\n  ) windows\n  WHERE avg_prior IS NOT NULL\n    AND (avg_recent - avg_prior) / NULLIF(avg_prior, 0) > 0.10\n  ORDER BY  \"% Change\" DESC\n  LIMIT 20\n\n",
+                        "rawSql": "SELECT\n      device_id As \"Device ID\",\n      initcap(replace(device_type, '_',' '))  As \"Device Type\",\n      initcap(replace(plant_id, 'PLANT_','')) AS \"Plant ID\",\n      ROUND(avg_recent, 2) AS \"Avg - Latest 6 hrs\",\n      ROUND(avg_prior,  2) AS \"Avg - Prior 6 hrs\",\n      ROUND(avg_recent - avg_prior, 2) AS \"Abolute Delta\",\n      ROUND((avg_recent - avg_prior) / NULLIF(avg_prior, 0) * 100, 1) AS \"% Change\"\n  FROM (\n      SELECT\n          tags['device_id']   AS device_id,\n          tags['device_type'] AS device_type,\n          tags['plant_id']    AS plant_id,\n          AVG(CASE WHEN \"timestamp\" >= TIMESTAMP '2025-09-07 06:00:00'\n                    AND \"timestamp\" <  TIMESTAMP '2025-09-07 12:00:00'\n                   THEN fields['metric_value'] END) AS avg_recent,\n          AVG(CASE WHEN \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00'\n                    AND \"timestamp\" <  TIMESTAMP '2025-09-07 06:00:00'\n                   THEN fields['metric_value'] END) AS avg_prior\n      FROM rtia.iot_data\n      WHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00'\n        AND \"timestamp\" <  TIMESTAMP '2025-09-07 12:00:00'\n      GROUP BY tags['device_id'], tags['device_type'], tags['plant_id']\n  ) windows\n  WHERE avg_prior IS NOT NULL\n    AND (avg_recent - avg_prior) / NULLIF(avg_prior, 0) > 0.10\n  ORDER BY  \"% Change\" DESC\n  LIMIT 20\n\n",
                         "sql": {
                           "columns": [
                             {
@@ -1810,7 +1810,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n  device_id As \"Device ID\",\n      initcap(replace(device_type, '_',' '))  As \"Device Type\",\n      initcap(replace(plant_id, 'PLANT_','')) AS \"Plant ID\",\n    COUNT(*)                    AS \"Threshold Breaches\",\n    ROUND(MAX(metric_value), 2) AS \"Peak Value\",\n    ROUND(MIN(quality_score), 1) AS \"Lowest Quality\",\n    MIN(\"timestamp\")            AS \"First Breach At\"\nFROM rtia.iot_data\nWHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00'\n  AND \"timestamp\" <  TIMESTAMP '2025-09-08 00:00:00'\n  AND status IN ('warning', 'critical')\nGROUP BY device_id, device_type, plant_id\nHAVING COUNT(*) >= 10\nORDER BY \"Threshold Breaches\" DESC;",
+                        "rawSql": "SELECT\n  tags['device_id'] As \"Device ID\",\n      initcap(replace(tags['device_type'], '_',' '))  As \"Device Type\",\n      initcap(replace(tags['plant_id'], 'PLANT_','')) AS \"Plant ID\",\n    COUNT(*)                    AS \"Threshold Breaches\",\n    ROUND(MAX(fields['metric_value']), 2) AS \"Peak Value\",\n    ROUND(MIN(fields['quality_score']), 1) AS \"Lowest Quality\",\n    MIN(\"timestamp\")            AS \"First Breach At\"\nFROM rtia.iot_data\nWHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00'\n  AND \"timestamp\" <  TIMESTAMP '2025-09-08 00:00:00'\n  AND tags['status'] IN ('warning', 'critical')\nGROUP BY tags['device_id'], tags['device_type'], tags['plant_id']\nHAVING COUNT(*) >= 10\nORDER BY \"Threshold Breaches\" DESC;",
                         "sql": {
                           "columns": [
                             {
@@ -1909,7 +1909,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n  device_id As \"Device ID\",\n      initcap(replace(device_type, '_',' '))  As \"Device Type\",\n      initcap(replace(plant_id, 'PLANT_','')) AS \"Plant ID\",\n    ROUND(AVG(quality_score) FILTER (\n        WHERE \"timestamp\" < TIMESTAMP '2025-09-07 00:00:00'\n    ), 1) AS \"Baseline Quality\",\n    ROUND(AVG(quality_score) FILTER (\n        WHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00'\n    ), 1) AS \"Recent Quality\",\n    ROUND(\n        (\n            AVG(quality_score) FILTER (WHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00')\n            - AVG(quality_score) FILTER (WHERE \"timestamp\" < TIMESTAMP '2025-09-07 00:00:00')\n        )\n        / NULLIF(\n            AVG(quality_score) FILTER (WHERE \"timestamp\" < TIMESTAMP '2025-09-07 00:00:00'),\n            0\n          ) * 100,\n        1\n    ) AS \"Quality Change Pct\"\nFROM rtia.iot_data\nGROUP BY device_id, device_type, plant_id\nHAVING AVG(quality_score) FILTER (WHERE \"timestamp\" < TIMESTAMP '2025-09-07 00:00:00') IS NOT NULL\n   AND AVG(quality_score) FILTER (WHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00') IS NOT NULL\nORDER BY \"Quality Change Pct\" ASC\nLIMIT 20;",
+                        "rawSql": "SELECT\n  tags['device_id'] As \"Device ID\",\n      initcap(replace(tags['device_type'], '_',' '))  As \"Device Type\",\n      initcap(replace(tags['plant_id'], 'PLANT_','')) AS \"Plant ID\",\n    ROUND(AVG(fields['quality_score']) FILTER (\n        WHERE \"timestamp\" < TIMESTAMP '2025-09-07 00:00:00'\n    ), 1) AS \"Baseline Quality\",\n    ROUND(AVG(fields['quality_score']) FILTER (\n        WHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00'\n    ), 1) AS \"Recent Quality\",\n    ROUND(\n        (\n            AVG(fields['quality_score']) FILTER (WHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00')\n            - AVG(fields['quality_score']) FILTER (WHERE \"timestamp\" < TIMESTAMP '2025-09-07 00:00:00')\n        )\n        / NULLIF(\n            AVG(fields['quality_score']) FILTER (WHERE \"timestamp\" < TIMESTAMP '2025-09-07 00:00:00'),\n            0\n          ) * 100,\n        1\n    ) AS \"Quality Change Pct\"\nFROM rtia.iot_data\nGROUP BY tags['device_id'], tags['device_type'], tags['plant_id']\nHAVING AVG(fields['quality_score']) FILTER (WHERE \"timestamp\" < TIMESTAMP '2025-09-07 00:00:00') IS NOT NULL\n   AND AVG(fields['quality_score']) FILTER (WHERE \"timestamp\" >= TIMESTAMP '2025-09-07 00:00:00') IS NOT NULL\nORDER BY \"Quality Change Pct\" ASC\nLIMIT 20;",
                         "sql": {
                           "columns": [
                             {
@@ -2008,7 +2008,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    initcap(replace(device_type, '_', ' ')) AS device_type,\n    COUNT(*)                                                AS total\nFROM rtia.iot_data\nWHERE status = 'critical'\nAND $__timeFilter(\"timestamp\") \nGROUP BY device_type\nORDER BY device_type DESC;",
+                        "rawSql": "SELECT\n    initcap(replace(tags['device_type'], '_', ' ')) AS device_type,\n    COUNT(*)                                                AS total\nFROM rtia.iot_data\nWHERE tags['status'] = 'critical'\nAND $__timeFilter(\"timestamp\") \nGROUP BY tags['device_type']\nORDER BY device_type DESC;",
                         "sql": {
                           "columns": [
                             {
@@ -2852,7 +2852,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    device_id AS \"Device ID\",\n    device_type AS \"Device Type\",\n    initcap(replace(plant_id,'PLANT_','')) AS \"Plant ID\",\n    metric_unit AS \"Metric Unit\",\n    metric_value AS \"Metric Value\",\n    \"timestamp\",\n    ROUND(DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = '$location')) / 1000, 1) AS \"KM from $location\"\nFROM rtia.iot_data\nWHERE status = 'critical'\n  AND DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = '$location')) < ($km *1000)\nORDER BY \"KM from $location\", timestamp desc\nLIMIT 20;",
+                        "rawSql": "SELECT\n    tags['device_id'] AS \"Device ID\",\n    tags['device_type'] AS \"Device Type\",\n    initcap(replace(tags['plant_id'],'PLANT_','')) AS \"Plant ID\",\n    tags['metric_unit'] AS \"Metric Unit\",\n    fields['metric_value'] AS \"Metric Value\",\n    \"timestamp\",\n    ROUND(DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = '$location')) / 1000, 1) AS \"KM from $location\"\nFROM rtia.iot_data\nWHERE tags['status'] = 'critical'\n  AND DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = '$location')) < ($km *1000)\nORDER BY \"KM from $location\", timestamp desc\nLIMIT 20;",
                         "sql": {
                           "columns": [
                             {
@@ -2980,7 +2980,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    device_type AS \"Device Type\",\n    COUNT(*)                     AS \"Critical Count\",\n    ROUND(AVG(quality_score), 1) AS \"Avg Quality\"\nFROM rtia.iot_data\nWHERE status = 'critical'\n  AND WITHIN(\n      geo_location,\n      (SELECT geo_area FROM rtia.locations WHERE location_name = '$area')\n  )\nGROUP BY device_type\nORDER BY \"Critical Count\" DESC;",
+                        "rawSql": "SELECT\n    tags['device_type'] AS \"Device Type\",\n    COUNT(*)                     AS \"Critical Count\",\n    ROUND(AVG(fields['quality_score']), 1) AS \"Avg Quality\"\nFROM rtia.iot_data\nWHERE tags['status'] = 'critical'\n  AND WITHIN(\n      geo_location,\n      (SELECT geo_area FROM rtia.locations WHERE location_name = '$area')\n  )\nGROUP BY tags['device_type']\nORDER BY \"Critical Count\" DESC;",
                         "sql": {
                           "columns": [
                             {
@@ -3079,7 +3079,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    p.city AS \"City\",\n    p.federal_state AS \"Federal State\",\n    p.industry_segment AS \"Industry Segment\",\n    COUNT(*)                                                   AS \"Total Readings\",\n    COUNT(*) FILTER (WHERE i.status = 'critical')              AS \"Critical Count\",\n    ROUND(AVG(i.quality_score), 1)                             AS \"Avg Quality\",\n    ROUND(DISTANCE(p.geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = 'Stuttgart')) / 1000, 0) AS \"KM From Stuttgart\"\nFROM rtia.iot_data i\nJOIN rtia.plants p ON i.plant_id = p.plant_id\nGROUP BY p.city, p.federal_state, p.industry_segment, p.geo_location\nORDER BY \"Critical Count\";",
+                        "rawSql": "SELECT\n    p.city AS \"City\",\n    p.federal_state AS \"Federal State\",\n    p.industry_segment AS \"Industry Segment\",\n    COUNT(*)                                                   AS \"Total Readings\",\n    COUNT(*) FILTER (WHERE i.tags['status'] = 'critical')              AS \"Critical Count\",\n    ROUND(AVG(i.fields['quality_score']), 1)                             AS \"Avg Quality\",\n    ROUND(DISTANCE(p.geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = 'Stuttgart')) / 1000, 0) AS \"KM From Stuttgart\"\nFROM rtia.iot_data i\nJOIN rtia.plants p ON i.tags['plant_id'] = p.plant_id\nGROUP BY p.city, p.federal_state, p.industry_segment, p.geo_location\nORDER BY \"Critical Count\";",
                         "sql": {
                           "columns": [
                             {
@@ -3205,7 +3205,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n      device_id As \"Device ID\",\n      initcap(replace(device_type, '_',' '))  As \"Device Type\",\n      initcap(replace(plant_id, 'PLANT_','')) AS \"Plant ID\",\n    initcap(status) AS \"Status\",\n    metric_value AS \"Value\",\n    metric_unit AS \"Unit\",\n    geo_location AS \"Location\",\n    ROUND(DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = '$location')) / 1000, 2) AS \"KM from $location\"\nFROM rtia.iot_data\nWHERE status IN ('warning', 'critical')\nORDER BY DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = '$location'))\nLIMIT 10;",
+                        "rawSql": "SELECT\n      tags['device_id'] As \"Device ID\",\n      initcap(replace(tags['device_type'], '_',' '))  As \"Device Type\",\n      initcap(replace(tags['plant_id'], 'PLANT_','')) AS \"Plant ID\",\n    initcap(tags['status']) AS \"Status\",\n    fields['metric_value'] AS \"Value\",\n    tags['metric_unit'] AS \"Unit\",\n    geo_location AS \"Location\",\n    ROUND(DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = '$location')) / 1000, 2) AS \"KM from $location\"\nFROM rtia.iot_data\nWHERE tags['status'] IN ('warning', 'critical')\nORDER BY DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = '$location'))\nLIMIT 10;",
                         "sql": {
                           "columns": [
                             {
@@ -3393,7 +3393,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    DATE_TRUNC('hour', \"timestamp\")             AS hour,\n    COUNT(*) FILTER (WHERE status = 'critical') AS \"Critical Error Count\"\nFROM rtia.iot_data\nWHERE  $__timeFilter(\"timestamp\") \nGROUP BY hour\nORDER BY hour;",
+                        "rawSql": "SELECT\n    DATE_TRUNC('hour', \"timestamp\")             AS hour,\n    COUNT(*) FILTER (WHERE tags['status'] = 'critical') AS \"Critical Error Count\"\nFROM rtia.iot_data\nWHERE  $__timeFilter(\"timestamp\") \nGROUP BY hour\nORDER BY hour;",
                         "sql": {
                           "columns": [
                             {
@@ -4117,7 +4117,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\ninitcap(replace(plant_id, 'PLANT_', ' ')) AS plant_id,\n   ANY_VALUE(geo_location)                     AS location,\n    COUNT(*) AS \"Critical Readings\"\n FROM rtia.iot_data\nWHERE status = 'critical'\nAND $__timeFilter(\"timestamp\") \nGROUP BY plant_id\nORDER BY \"Critical Readings\" DESC;",
+                        "rawSql": "SELECT\ninitcap(replace(tags['plant_id'], 'PLANT_', ' ')) AS plant_id,\n   ANY_VALUE(geo_location)                     AS location,\n    COUNT(*) AS \"Critical Readings\"\n FROM rtia.iot_data\nWHERE tags['status'] = 'critical'\nAND $__timeFilter(\"timestamp\") \nGROUP BY tags['plant_id']\nORDER BY \"Critical Readings\" DESC;",
                         "sql": {
                           "columns": [
                             {
@@ -4245,7 +4245,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n      latitude(geo_location) as latitude,\n  longitude(geo_location) as longitude,\n    ROUND(AVG(quality_score), 1)                AS avg_quality\nFROM rtia.iot_data\nWHERE $__timeFilter(\"timestamp\") \nGROUP BY plant_id,latitude(geo_location) ,\n  longitude(geo_location) ",
+                        "rawSql": "SELECT\n      latitude(geo_location) as latitude,\n  longitude(geo_location) as longitude,\n    ROUND(AVG(fields['quality_score']), 1)                AS avg_quality\nFROM rtia.iot_data\nWHERE $__timeFilter(\"timestamp\") \nGROUP BY tags['plant_id'],latitude(geo_location) ,\n  longitude(geo_location) ",
                         "sql": {
                           "columns": [
                             {
@@ -4495,7 +4495,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    DATE_TRUNC('hour', \"timestamp\")             AS hour,\n    COUNT(*) FILTER (WHERE status = 'critical') AS \"Critical Error Count\"\nFROM rtia.iot_data\nWHERE $__timeFilter(\"timestamp\") \nGROUP BY hour\nORDER BY hour;",
+                        "rawSql": "SELECT\n    DATE_TRUNC('hour', \"timestamp\")             AS hour,\n    COUNT(*) FILTER (WHERE tags['status'] = 'critical') AS \"Critical Error Count\"\nFROM rtia.iot_data\nWHERE $__timeFilter(\"timestamp\") \nGROUP BY hour\nORDER BY hour;",
                         "sql": {
                           "columns": [
                             {
@@ -4597,7 +4597,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    initcap(replace(p.industry_segment, '_', ' '))||' ('||ROUND(AVG(i.quality_score), 2)||'%)' AS industry_segment,\n    initcap(replace(p.plant_name, '_', ' '))  AS plant_name,\n    p.employee_count AS \"Employee Count\",\n    COUNT(*) FILTER (WHERE i.status = 'critical') AS \"Critical Events\",\n    COUNT(*) FILTER (WHERE i.status = 'warning')  AS \"Warning Events\",\n    ROUND(AVG(i.quality_score), 2)                AS \"Avg Quality\"\nFROM rtia.iot_data i\nJOIN rtia.plants p ON i.plant_id = p.plant_id\nWHERE $__timeFilter(i.\"timestamp\") \nGROUP BY p.industry_segment, p.plant_name, p.employee_count\nORDER BY  \"Avg Quality\" DESC;",
+                        "rawSql": "SELECT\n    initcap(replace(p.industry_segment, '_', ' '))||' ('||ROUND(AVG(i.fields['quality_score']), 2)||'%)' AS industry_segment,\n    initcap(replace(p.plant_name, '_', ' '))  AS plant_name,\n    p.employee_count AS \"Employee Count\",\n    COUNT(*) FILTER (WHERE i.tags['status'] = 'critical') AS \"Critical Events\",\n    COUNT(*) FILTER (WHERE i.tags['status'] = 'warning')  AS \"Warning Events\",\n    ROUND(AVG(i.fields['quality_score']), 2)                AS \"Avg Quality\"\nFROM rtia.iot_data i\nJOIN rtia.plants p ON i.tags['plant_id'] = p.plant_id\nWHERE $__timeFilter(i.\"timestamp\") \nGROUP BY p.industry_segment, p.plant_name, p.employee_count\nORDER BY  \"Avg Quality\" DESC;",
                         "sql": {
                           "columns": [
                             {
@@ -4757,7 +4757,7 @@
                         "editorMode": "code",
                         "format": "table",
                         "rawQuery": true,
-                        "rawSql": "SELECT\n    EXTRACT(HOUR FROM \"timestamp\") AS hour_of_day,\n    COUNT(*) FILTER (WHERE status = 'critical') AS \"Critical Error Count\"\nFROM rtia.iot_data\nWHERE  $__timeFilter(\"timestamp\") \nGROUP BY hour_of_day\nORDER BY hour_of_day;",
+                        "rawSql": "SELECT\n    EXTRACT(HOUR FROM \"timestamp\") AS hour_of_day,\n    COUNT(*) FILTER (WHERE tags['status'] = 'critical') AS \"Critical Error Count\"\nFROM rtia.iot_data\nWHERE  $__timeFilter(\"timestamp\") \nGROUP BY hour_of_day\nORDER BY hour_of_day;",
                         "sql": {
                           "columns": [
                             {

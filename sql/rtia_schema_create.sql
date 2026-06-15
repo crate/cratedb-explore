@@ -81,31 +81,28 @@ CREATE TABLE IF NOT EXISTS rtia.maintenance_log (
 
 
 -- ── 4. IOT_DATA ───────────────────────────────────────────────────────────────
--- Sensor readings — 500,000 rows across 500 devices and 5 plants
--- Partitioned by month; clustered by device_id within each partition.
+-- Sensor readings — 500,000 rows across 500 devices and 5 plants.
+-- Telegraf line-protocol shape (hash_id / timestamp / name / tags / fields), so
+-- the same table can be fed either by COPY FROM or by Telegraf's outputs.cratedb
+-- (postgres/crate) plugin. That plugin can't write a GEO_POINT, so the geo coords
+-- ride along as plain doubles in `fields` and geo_location is GENERATED from them.
+-- Partitioned by day.
 
 CREATE TABLE IF NOT EXISTS rtia.iot_data (
-    device_id       TEXT,
-    device_type     TEXT,
-    plant_id        TEXT,
-    line_id         TEXT,
-    "timestamp"     TIMESTAMP WITH TIME ZONE,
-    month           TIMESTAMP WITH TIME ZONE
-                        GENERATED ALWAYS AS DATE_TRUNC('month', "timestamp"),
-    metric_value    DOUBLE PRECISION,
-    metric_unit     TEXT,
-    status          TEXT,              -- 'normal' | 'warning' | 'critical' | 'offline'
-    quality_score   DOUBLE PRECISION,
-    geo_location    GEO_POINT,
-    metadata        OBJECT(STRICT) AS (
-        firmware_version    TEXT,
-        model               TEXT,
-        installation_date   TEXT,
-        last_calibration    TEXT
-    )
-)
-CLUSTERED BY (device_id) INTO 4 SHARDS
-PARTITIONED BY (month);
+    hash_id      BIGINT,
+    "timestamp"  TIMESTAMP WITH TIME ZONE,
+    name         TEXT,                          -- measurement name (= "iot_data")
+    tags         OBJECT(DYNAMIC),               -- device_id, status, metadata_*, ... (indexed strings)
+    fields       OBJECT(DYNAMIC) AS (
+        metric_value  DOUBLE PRECISION,
+        quality_score DOUBLE PRECISION,
+        geo_lon       DOUBLE PRECISION,
+        geo_lat       DOUBLE PRECISION
+    ),
+    day          TIMESTAMP WITH TIME ZONE GENERATED ALWAYS AS date_trunc('day', "timestamp"),
+    geo_location GEO_POINT GENERATED ALWAYS AS [fields['geo_lon'], fields['geo_lat']],
+    PRIMARY KEY (hash_id, "timestamp", day)
+) PARTITIONED BY (day);
 
 
 -- ─────────────────────────────────────────────────────────────────────────────

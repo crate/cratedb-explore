@@ -21,6 +21,11 @@
 -- CrateDB Industrial IoT — Advanced Queries
 -- Full-text search and geospatial capabilities
 -- Tables:  iot_data · plants · devices · maintenance_log
+--
+-- iot_data is stored in the Telegraf line-protocol shape: string dimensions in
+-- the `tags` OBJECT (tags['device_id'], tags['status'], …) and numeric
+-- measurements in `fields` (fields['metric_value'], fields['quality_score']).
+-- geo_location is a GEO_POINT GENERATED from fields['geo_lon'] / fields['geo_lat'].
 -- ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -45,19 +50,19 @@ SELECT
       ROUND((avg_recent - avg_prior) / NULLIF(avg_prior, 0) * 100, 1) AS pct_change
   FROM (
       SELECT
-          device_id,
-          device_type,
-          plant_id,
+          tags['device_id']   AS device_id,
+          tags['device_type'] AS device_type,
+          tags['plant_id']    AS plant_id,
           AVG(CASE WHEN "timestamp" >= TIMESTAMP '2025-09-07 06:00:00'
                     AND "timestamp" <  TIMESTAMP '2025-09-07 12:00:00'
-                   THEN metric_value END) AS avg_recent,
+                   THEN fields['metric_value'] END) AS avg_recent,
           AVG(CASE WHEN "timestamp" >= TIMESTAMP '2025-09-07 00:00:00'
                     AND "timestamp" <  TIMESTAMP '2025-09-07 06:00:00'
-                   THEN metric_value END) AS avg_prior
+                   THEN fields['metric_value'] END) AS avg_prior
       FROM rtia.iot_data
       WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00'
         AND "timestamp" <  TIMESTAMP '2025-09-07 12:00:00'
-      GROUP BY device_id, device_type, plant_id
+      GROUP BY tags['device_id'], tags['device_type'], tags['plant_id']
   ) windows
   WHERE avg_prior IS NOT NULL
     AND (avg_recent - avg_prior) / NULLIF(avg_prior, 0) > 0.10
@@ -69,21 +74,21 @@ SELECT
 
 WITH windows AS (
     SELECT
-        device_id,
-        device_type,
-        plant_id,
-        AVG(metric_value) FILTER (
+        tags['device_id']   AS device_id,
+        tags['device_type'] AS device_type,
+        tags['plant_id']    AS plant_id,
+        AVG(fields['metric_value']) FILTER (
             WHERE "timestamp" >= TIMESTAMP '2025-09-07 06:00:00'
               AND "timestamp" <  TIMESTAMP '2025-09-07 12:00:00'
         ) AS avg_recent,
-        AVG(metric_value) FILTER (
+        AVG(fields['metric_value']) FILTER (
             WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00'
               AND "timestamp" <  TIMESTAMP '2025-09-07 06:00:00'
         ) AS avg_prior
     FROM rtia.iot_data
     WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00'
       AND "timestamp" <  TIMESTAMP '2025-09-07 12:00:00'
-    GROUP BY device_id, device_type, plant_id
+    GROUP BY tags['device_id'], tags['device_type'], tags['plant_id']
 )
 SELECT
     device_id,
@@ -105,18 +110,18 @@ LIMIT 20;
 -- day — distinguishing sustained degradation from transient noise spikes.
 
 SELECT
-    device_id,
-    device_type,
-    plant_id,
-    COUNT(*)                    AS threshold_exceedances,
-    ROUND(MAX(metric_value), 2) AS peak_value,
-    ROUND(MIN(quality_score), 1) AS lowest_quality,
-    MIN("timestamp")            AS first_breach_at
+    tags['device_id']   AS device_id,
+    tags['device_type'] AS device_type,
+    tags['plant_id']    AS plant_id,
+    COUNT(*)                          AS threshold_exceedances,
+    ROUND(MAX(fields['metric_value']), 2)  AS peak_value,
+    ROUND(MIN(fields['quality_score']), 1) AS lowest_quality,
+    MIN("timestamp")                  AS first_breach_at
 FROM rtia.iot_data
 WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00'
   AND "timestamp" <  TIMESTAMP '2025-09-08 00:00:00'
-  AND status IN ('warning', 'critical')
-GROUP BY device_id, device_type, plant_id
+  AND tags['status'] IN ('warning', 'critical')
+GROUP BY tags['device_id'], tags['device_type'], tags['plant_id']
 HAVING COUNT(*) >= 10
 ORDER BY threshold_exceedances DESC;
 
@@ -127,30 +132,30 @@ ORDER BY threshold_exceedances DESC;
 -- historical baseline.
 
 SELECT
-    device_id,
-    device_type,
-    plant_id,
-    ROUND(AVG(quality_score) FILTER (
+    tags['device_id']   AS device_id,
+    tags['device_type'] AS device_type,
+    tags['plant_id']    AS plant_id,
+    ROUND(AVG(fields['quality_score']) FILTER (
         WHERE "timestamp" < TIMESTAMP '2025-09-07 00:00:00'
     ), 1) AS baseline_quality,
-    ROUND(AVG(quality_score) FILTER (
+    ROUND(AVG(fields['quality_score']) FILTER (
         WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00'
     ), 1) AS recent_quality,
     ROUND(
         (
-            AVG(quality_score) FILTER (WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00')
-            - AVG(quality_score) FILTER (WHERE "timestamp" < TIMESTAMP '2025-09-07 00:00:00')
+            AVG(fields['quality_score']) FILTER (WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00')
+            - AVG(fields['quality_score']) FILTER (WHERE "timestamp" < TIMESTAMP '2025-09-07 00:00:00')
         )
         / NULLIF(
-            AVG(quality_score) FILTER (WHERE "timestamp" < TIMESTAMP '2025-09-07 00:00:00'),
+            AVG(fields['quality_score']) FILTER (WHERE "timestamp" < TIMESTAMP '2025-09-07 00:00:00'),
             0
           ) * 100,
         1
     ) AS quality_change_pct
 FROM rtia.iot_data
-GROUP BY device_id, device_type, plant_id
-HAVING AVG(quality_score) FILTER (WHERE "timestamp" < TIMESTAMP '2025-09-07 00:00:00') IS NOT NULL
-   AND AVG(quality_score) FILTER (WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00') IS NOT NULL
+GROUP BY tags['device_id'], tags['device_type'], tags['plant_id']
+HAVING AVG(fields['quality_score']) FILTER (WHERE "timestamp" < TIMESTAMP '2025-09-07 00:00:00') IS NOT NULL
+   AND AVG(fields['quality_score']) FILTER (WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00') IS NOT NULL
 ORDER BY quality_change_pct ASC
 LIMIT 20;
 
@@ -226,7 +231,8 @@ LIMIT 10;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- GEOSPATIAL
--- geo_location is a GEO_POINT stored as [longitude, latitude].
+-- geo_location is a GEO_POINT GENERATED from fields['geo_lon'] / fields['geo_lat']
+-- and stored as [longitude, latitude].
 -- DISTANCE() returns meters. WITHIN() tests point-in-polygon.
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -246,15 +252,15 @@ ORDER BY km_from_stuttgart;
 -- All critical sensor events within 100 km of Frankfurt
 
 SELECT
-    device_id,
-    device_type,
-    plant_id,
-    metric_value,
-    metric_unit,
+    tags['device_id']   AS device_id,
+    tags['device_type'] AS device_type,
+    tags['plant_id']    AS plant_id,
+    fields['metric_value'] AS metric_value,
+    tags['metric_unit'] AS metric_unit,
     "timestamp",
     ROUND(DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = 'Frankfurt')) / 1000, 1) AS km_from_frankfurt
 FROM rtia.iot_data
-WHERE status = 'critical'
+WHERE tags['status'] = 'critical'
   AND DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = 'Frankfurt')) < 150000
 ORDER BY km_from_frankfurt
 LIMIT 20;
@@ -264,16 +270,16 @@ LIMIT 20;
 -- Critical alerts inside the Bavaria bounding box
 
 SELECT
-    device_type,
+    tags['device_type']          AS device_type,
     COUNT(*)                     AS critical_count,
-    ROUND(AVG(quality_score), 1) AS avg_quality
+    ROUND(AVG(fields['quality_score']), 1) AS avg_quality
 FROM rtia.iot_data
-WHERE status = 'critical'
+WHERE tags['status'] = 'critical'
   AND WITHIN(
       geo_location,
       (SELECT geo_area FROM rtia.locations WHERE location_name = 'Bavaria')
   )
-GROUP BY device_type
+GROUP BY tags['device_type']
 ORDER BY critical_count DESC;
 
 
@@ -285,11 +291,11 @@ SELECT
     p.federal_state,
     p.industry_segment,
     COUNT(*)                                                   AS total_readings,
-    COUNT(*) FILTER (WHERE i.status = 'critical')              AS critical_count,
-    ROUND(AVG(i.quality_score), 1)                             AS avg_quality,
+    COUNT(*) FILTER (WHERE i.tags['status'] = 'critical')      AS critical_count,
+    ROUND(AVG(i.fields['quality_score']), 1)                   AS avg_quality,
     ROUND(DISTANCE(p.geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = 'Stuttgart')) / 1000, 0) AS km_from_stuttgart
 FROM rtia.iot_data i
-JOIN rtia.plants p ON i.plant_id = p.plant_id
+JOIN rtia.plants p ON i.tags['plant_id'] = p.plant_id
 GROUP BY p.city, p.federal_state, p.industry_segment, p.geo_location
 ORDER BY critical_count DESC;
 
@@ -298,16 +304,16 @@ ORDER BY critical_count DESC;
 -- Find the closest device currently in warning or critical state to Munich
 
 SELECT
-    device_id,
-    device_type,
-    plant_id,
-    status,
-    metric_value,
-    metric_unit,
+    tags['device_id']   AS device_id,
+    tags['device_type'] AS device_type,
+    tags['plant_id']    AS plant_id,
+    tags['status']      AS status,
+    fields['metric_value'] AS metric_value,
+    tags['metric_unit'] AS metric_unit,
     geo_location,
     ROUND(DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = 'Munich')) / 1000, 2) AS km_from_munich
 FROM rtia.iot_data
-WHERE status IN ('warning', 'critical')
+WHERE tags['status'] IN ('warning', 'critical')
 ORDER BY DISTANCE(geo_location, (SELECT geo_location FROM rtia.locations WHERE location_name = 'Munich'))
 LIMIT 10;
 
