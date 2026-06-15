@@ -158,7 +158,7 @@ python replay_to_telegraf.py --url http://my-telegraf-host:8186/telegraf
 
 ### What the script does
 
-The script reads `iot_demo_dataset.json` line by line and POSTs each record to Telegraf as a single JSON object. The `json_v2` parser's `object` block (`path = "@this"`) parses that object into one metric, reads the nested `tags{}` and `fields{}` keys, and the `outputs.cratedb` plugin writes it to `rtia.iot_data` over the PostgreSQL wire protocol. (This input + json_v2 only accepts one object per request — a JSON array, bare or wrapped, is rejected with HTTP 400 — so records are posted individually. `--batch` controls the progress/`--delay` cadence, not the HTTP payload.)
+The script reads `iot_demo_dataset.json` line by line and POSTs each record to Telegraf as a single JSON object. The `json_v2` parser's explicit `tag` / `field` selectors parse it into one metric, reading the nested `tags{}` and `fields{}` keys, and the `outputs.cratedb` plugin writes it to `rtia.iot_data` over the PostgreSQL wire protocol. (This input + json_v2 only accepts one object per request — a JSON array, bare or wrapped, is rejected with HTTP 400 — so records are posted individually. `--batch` controls the progress/`--delay` cadence, not the HTTP payload.)
 
 With `--delay 0.05` and `--batch 100`, you pause briefly every 100 records — slow enough to watch the row count climb in CrateDB Admin UI while the script is still running.
 
@@ -169,8 +169,14 @@ With `--delay 0.05` and `--batch 100`, you pause briefly every 100 records — s
 Once the script starts, open CrateDB Admin UI and run:
 
 ```sql
--- Row count (refresh to watch it grow)
-SELECT COUNT(*) FROM rtia.iot_data;
+-- Row count + device count. REFRESH makes just-written rows visible (CrateDB's
+-- table refresh_interval defaults to 1s). A healthy load shows the full row
+-- count AND >1 distinct device — if device count is 1 (or device_id is null),
+-- the tags aren't reaching the metric (see "Reliability & gotchas").
+REFRESH TABLE rtia.iot_data;
+SELECT COUNT(*)                          AS rows,
+       COUNT(DISTINCT tags['device_id']) AS devices
+FROM rtia.iot_data;
 
 -- Records per device
 SELECT tags['device_id'] AS device_id, tags['device_type'] AS device_type,
@@ -204,30 +210,36 @@ The table is **not** auto-created (Step 1 — `table_create = false`), so it alr
 
 ## How Telegraf maps the data
 
-Each POST is a single record, already in `{hash_id, timestamp, name, tags{}, fields{}}` shape. The `object` block with `path = "@this"` parses that whole object into one metric:
+Each POST is a single record, already in `{hash_id, timestamp, name, tags{}, fields{}}` shape. Explicit `tag` / `field` selectors, each with a GJSON `path` into the nested objects, parse it into **one** metric carrying both the tags and the fields:
 
 ```toml
-[[inputs.http_listener_v2.json_v2.object]]
-  path                 = "@this"          # parse the posted object
-  timestamp_key        = "timestamp"      # event time
-  timestamp_format     = "2006-01-02 15:04:05"
-  timestamp_timezone   = "UTC"
-  disable_prepend_keys = true             # tags.device_id -> device_id (not tags_device_id)
-  included_keys = ["device_id", "status", "metric_value", "geo_lon"]  # …allow-list, rest dropped
-  tags          = ["device_id", "status"]                             # …which of those are tags
-  [inputs.http_listener_v2.json_v2.object.fields]
-    metric_value = "float"
-    geo_lon      = "float"
-    geo_lat      = "float"
+[[inputs.http_listener_v2.json_v2]]
+  measurement_name   = "iot_data"
+  timestamp_path     = "timestamp"
+  timestamp_format   = "2006-01-02 15:04:05"
+  timestamp_timezone = "UTC"
+
+  [[inputs.http_listener_v2.json_v2.tag]]
+    path   = "tags.device_id"        # GJSON into the nested tags{}
+    rename = "device_id"             # -> tags['device_id'] in CrateDB
+  # … one block per tag (device_type, plant_id, status, metric_unit, metadata_*) …
+
+  [[inputs.http_listener_v2.json_v2.field]]
+    path   = "fields.metric_value"   # GJSON into the nested fields{}
+    rename = "metric_value"
+    type   = "float"
+  # … one block per field (quality_score, geo_lon, geo_lat) …
 ```
 
-- **`path = "@this"`** selects the posted object. This input + json_v2 parses **one object per request** — a JSON array (bare `[ … ]` or wrapped `{"metrics":[ … ]}`) is rejected with HTTP 400 — so the replay script posts records individually.
-- **`disable_prepend_keys = true`** flattens the nested `tags.*` / `fields.*` keys to their leaf names, so they match the column names the queries use.
-- **`included_keys`** is the allow-list — only these keys become tags/fields. It drops the per-element `hash_id` and `name`, which the `outputs.cratedb` plugin sets itself (hash_id computed from name + tags; name from `measurement_name`).
-- **`tags = [...]`** marks which included keys are tags (`tags['device_id']`, indexed for `WHERE` / `GROUP BY`); the rest are fields.
-- The **`object.fields`** type map forces `float`, so Telegraf doesn't infer integer and lose precision — and `geo_lon` / `geo_lat` stay the doubles the `geo_location` GENERATED column needs.
+- **`tag` / `field` selectors with GJSON `path`** (`tags.device_id`, `fields.metric_value`) read straight into the nested objects; `rename` sets the CrateDB key. Crucially they all attach to the **same metric**, so the device tags travel with the data — `device_id` becomes part of the plugin's `hash_id`, keeping every device/timestamp row distinct.
+- **`type = "float"`** forces `DOUBLE PRECISION`, so Telegraf doesn't infer integer and lose precision — and `geo_lon` / `geo_lat` stay the doubles the `geo_location` GENERATED column needs.
+- **`timestamp_path`** reads the event time; `2006-01-02 15:04:05` is Go's reference time and matches `iot_demo_dataset.json`. The timestamps are naive, so `timestamp_timezone = "UTC"` pins them.
 
-`2006-01-02 15:04:05` is Go's reference time and matches the format in `iot_demo_dataset.json`; the timestamps are naive, so `timestamp_timezone = "UTC"` pins them.
+> **Two json_v2 traps to avoid** (both cost real debugging time here):
+> 1. **Don't split into separate `path="tags"` / `path="fields"` object blocks.** json_v2 emits those as *two* metrics; the tags-only one has no field and is dropped, and the surviving data metric loses `device_id`. Every row then hashes to the same `hash_id`, and CrateDB collapses them to one row per timestamp — silent row loss.
+> 2. **Don't use `path="@this"` with `included_keys`.** The allow-list doesn't match the flattened nested keys, so the metric ends up with no fields and is dropped — no data, no log lines.
+>
+> The explicit selectors above sidestep both.
 
 ---
 
@@ -243,7 +255,25 @@ The config has three sections:
 [[outputs.cratedb]]           CrateDB destination (PostgreSQL wire, :5432)
 ```
 
-To debug what Telegraf parsed before it hits CrateDB, uncomment the `[[outputs.file]]` block at the bottom of the config. With `data_format = "influx"` it prints each metric as line protocol to stdout, so you can see exactly which tags and fields were extracted.
+To debug what Telegraf parsed before it hits CrateDB, uncomment the `[[outputs.file]]` block at the bottom of the config. With `data_format = "influx"` it prints each metric as line protocol to stdout, so you can see exactly which tags and fields were extracted (e.g. `iot_data,device_id=DEVICE_0001,status=normal,… metric_value=62.7,… <ts>`). If `device_id=` is missing from that line, the parser is wrong — see below.
+
+---
+
+## Reliability & gotchas
+
+Hard-won notes — each of these caused a real "rows are missing" head-scratch:
+
+**1. One metric per record — use explicit `tag`/`field` selectors.** The dataset nests `tags{}` and `fields{}`. Two json_v2 layouts *look* right but silently lose data:
+- Separate `path="tags"` and `path="fields"` object blocks → json_v2 emits **two** metrics; the tags-only one is dropped (no field) and the data metric loses `device_id`, so every row hashes to the same `hash_id` and CrateDB keeps **one row per timestamp**.
+- `path="@this"` + `included_keys` → the allow-list doesn't match the flattened nested keys, the metric has **no fields**, and is dropped — you get no rows and no log lines.
+
+The working form is the explicit `tag`/`field` selectors with GJSON paths (`tags.device_id`, `fields.metric_value`) shown above. **Verify with `COUNT(DISTINCT tags['device_id'])` — it must be > 1.**
+
+**2. First load into an empty table is slow (partition creation).** `rtia.iot_data` is `PARTITIONED BY (day)` and the dataset spans ~200 days, so the first flushes create ~200 partitions in one insert. With a short output `timeout` those writes are killed mid-flight, retried, and the buffer overflows → dropped rows (`timeout: context deadline exceeded` in the Telegraf log). The config ships with headroom for this: `outputs.cratedb` `timeout = "120s"`, `flush_interval = "10s"`, `metric_batch_size = 10000`, `metric_buffer_limit = 500000`. To avoid the slow first load entirely, **pre-create the partitions** with the README `COPY FROM` bulk load first, or **rate-limit** the producer (`--delay 0.05+`).
+
+**3. Counts lag — `REFRESH TABLE` before counting.** Telegraf flushes on an interval and writes asynchronously, and CrateDB's `refresh_interval` (default 1s) delays query visibility. A `COUNT(*)` run the instant the script finishes undercounts. Wait for the Telegraf `did not complete within its flush interval` warnings to stop, then `REFRESH TABLE rtia.iot_data;` and count.
+
+**4. Plain `INSERT`, no upsert.** `outputs.cratedb` issues a plain `INSERT` (no `ON CONFLICT`), so a duplicate-PK row is rejected per-row while the rest of the batch succeeds. Re-running the same data is therefore safe (the already-present rows are rejected, missing ones fill in) — but it also means a botched earlier run can leave rows you should clear with `TRUNCATE TABLE rtia.iot_data;` before re-testing.
 
 ---
 

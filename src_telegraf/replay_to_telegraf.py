@@ -129,7 +129,7 @@ def replay(url: str, path: str, batch_size: int, delay: float,
     print("=" * 60)
     print(f"  Source : {os.path.basename(path)}")
     print(f"  Target : {url}")
-    print(f"  Batch  : {batch_size} records per POST")
+    print(f"  Batch  : {batch_size} records per progress update")
     print(f"  Delay  : {delay}s between batches")
     if device_filter:
         print(f"  Filter : device_id = {device_filter}")
