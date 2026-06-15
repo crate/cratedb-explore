@@ -326,8 +326,8 @@ Swapping the file read for a SQL query against CrateDB removes that problem enti
 
 ### Setup
 
-Uncomment the "use CrateDB as the data source" block in `requirements.txt` and
-reinstall:
+Install the dependencies (the CrateDB tier is already listed in
+`requirements.txt`):
 
 ```bash
 pip install -r requirements.txt
@@ -559,8 +559,9 @@ This is why CrateDB is required at inference time, not just training time. The f
 
 **File:** `realtime_inference.py` (in `src_ml/`)
 
-Uncomment the "real-time inference service" block in `requirements.txt` (it pulls
-in the CrateDB block too), then:
+Install the dependencies (`requirements.txt` already includes FastAPI/uvicorn and
+the CrateDB tier — `sqlalchemy-cratedb` registers the `crate://` dialect the
+service connects through), then:
 
 ```bash
 pip install -r requirements.txt
