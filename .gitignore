@@ -154,3 +154,4 @@ dmypy.json
 .pyre/
 .pytype/
 cython_debug/
+/src_telegraf/telegraf_test_demo.conf
