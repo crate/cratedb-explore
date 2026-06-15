@@ -333,7 +333,8 @@ reinstall:
 pip install -r requirements.txt
 ```
 
-`crate` is the official CrateDB Python client. `sqlalchemy` enables `pandas.read_sql()`.
+`sqlalchemy-cratedb` registers the `crate://` SQLAlchemy dialect (and pulls in
+the official `crate` client); `sqlalchemy` itself backs `pandas.read_sql()`.
 
 **CrateDB local / Docker:**
 
