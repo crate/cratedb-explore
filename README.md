@@ -151,6 +151,10 @@ The maintenance-note vectors are 384-dimension `FLOAT_VECTOR` embeddings (senten
 
 [`src_telegraf/`](src_telegraf/) is the live-streaming counterpart to the `COPY FROM` bulk load: a Python script replays the dataset to a [Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) HTTP listener, which writes to the **same** `rtia.iot_data` table via Telegraf's native `outputs.cratedb` plugin over the PostgreSQL wire protocol (port 5432). CrateDB has no InfluxDB line-protocol endpoint, so `outputs.cratedb` is the supported path; geo still works because `geo_location` is `GENERATED` from the `geo_lon` / `geo_lat` fields. See [`src_telegraf/TELEGRAF_GUIDE.md`](src_telegraf/TELEGRAF_GUIDE.md) for the full walkthrough.
 
+### Machine learning
+
+[`src_ml/`](src_ml/) trains two models from the same `rtia.iot_data` readings: an XGBoost **predictive-maintenance classifier** (will a device enter warning/critical within the next few readings?) and an Isolation Forest **anomaly detector**. `train_model.py` and `predict.py` work offline from the dataset file, while `realtime_inference.py` is a FastAPI service that fetches each device's recent history from CrateDB, scores it, and writes the prediction back — so results are queryable alongside the raw sensor data. The guide also shows how to swap the file read for SQL against `rtia.iot_data` (scheduled retraining, in-database feature aggregation, live scoring). See [`src_ml/ML_GUIDE.md`](src_ml/ML_GUIDE.md) for the full walkthrough.
+
 ### Dashboard
 
 [`grafana/rtia.json`](grafana/rtia.json) is the **"Real Time Industrial Analytics Dashboard"** — summary KPIs, critical-event tracking, device-level detail, maintenance cost by plant, OEE, KNN searches, full-text search, and geospatial panels over the `rtia` schema. Import it the same way as the weather dashboard: add a PostgreSQL datasource pointing at your CrateDB cluster, then **Dashboards > Import**.
