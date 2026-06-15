@@ -65,10 +65,10 @@ pip install -r requirements.txt
 
 ## Step 1 — Create the table
 
-If you have already done other parts of this, the table rtia.iiot_data may already exist, in which case you many need to DELETE from it, as
-we're loading the same data set we originally used. If you don't have rtia.iiot_data, continue. 
+If you have already done other parts of this, the table `rtia.iot_data` may already exist, in which case you may need to DELETE from it, as
+we're loading the same data set we originally used. If you don't have `rtia.iot_data`, continue.
 
-In the file telgraf_demo.conf, `outputs.cratedb` is configured with `table_create = false`, because the plugin's 
+In the file `telegraf_demo.conf`, `outputs.cratedb` is configured with `table_create = false`, because the plugin's 
 auto-create cannot reproduce the `GENERATED` `geo_location` / `day` columns. Create the table first by running 
 the `CREATE TABLE rtia.iot_data` statement from `sql/rtia_schema_create.sql` (a `COPY FROM` load of the other rtia tables is optional — only `iot_data` is needed for this demo).
 
