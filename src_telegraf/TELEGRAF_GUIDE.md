@@ -187,12 +187,19 @@ ORDER BY readings DESC
 LIMIT 10;
 
 -- Latest reading per device
-SELECT tags['device_id'] AS device_id, MAX("timestamp") AS last_seen,
-       last(tags['status'], "timestamp") AS last_status
-FROM rtia.iot_data
-GROUP BY tags['device_id']
-ORDER BY last_seen DESC
-LIMIT 10;
+ SELECT device_id, last_seen, status AS last_status
+ FROM (
+    SELECT tags['device_id'] AS device_id,
+           "timestamp"        AS last_seen,
+           tags['status']     AS status,
+              ROW_NUMBER() OVER (PARTITION BY tags['device_id']
+                              ORDER BY "timestamp" DESC) AS rn
+    FROM rtia.iot_data
+  ) t
+  WHERE rn = 1
+  ORDER BY last_seen DESC
+  LIMIT 10;
+
 
 -- Geo works on Telegraf-ingested rows: geo_location is GENERATED from
 -- fields['geo_lon'] / fields['geo_lat'], so DISTANCE() queries run directly.
