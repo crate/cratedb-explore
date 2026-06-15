@@ -165,7 +165,9 @@ python predict.py --device DEVICE_0042
 python predict.py --input /path/to/new_readings.json
 ```
 
-The input file must be NDJSON (one JSON object per line) with at minimum these fields:
+The input file must be NDJSON (one JSON object per line). Records may be in the
+canonical Telegraf `tags{}`/`fields{}` shape (like the demo dataset) or already
+flat — the loader flattens either. A flat record needs at minimum:
 `device_id`, `device_type`, `timestamp`, `metric_value`, `quality_score`, `status`, `metadata`
 
 ### Output columns in `scored_batch.csv`
@@ -256,34 +258,37 @@ A reading can be high-anomaly but low-fault-probability (unusual sensor reading 
 
 ```python
 import pickle
-import numpy as np
+import pandas as pd
 
 # Load
 with open('model/predictive_maintenance_model.pkl', 'rb') as f:
     clf = pickle.load(f)
-
 with open('model/anomaly_detector_model.pkl', 'rb') as f:
     iso = pickle.load(f)
 
-# clf['features'] is the exact ordered feature list the model was trained on
-print(clf['features'])
-print(f"Horizon: {clf['horizon']} readings")
-print(f"Trained at: {clf['trained_at']}")
-print(f"ROC-AUC on test set: {clf['roc_auc']}")
+print(clf['features'])          # exact ordered feature list the model expects (20 features)
+print(f"Horizon: {clf['horizon']} readings   ROC-AUC: {clf['roc_auc']}")
 
-# Build a feature row in the same order (values must be numeric — encode device_type first)
-x = np.array([[...]])   # shape (1, 23)
+# device_type must be label-encoded first (strings -> ints)
+device_type_enc = clf['label_encoder'].transform(['vibration_sensor'])[0]
 
-# Fault probability
-prob = clf['model'].predict_proba(x)[0, 1]
-print(f'Fault probability: {prob:.1%}')
+# Build one feature row as {name: value}, then select each model's feature list
+# BY NAME. The classifier uses all 20 features; the anomaly detector uses a
+# 7-feature subset in a *different* order — so never slice the array positionally.
+row = {
+    'metric_value': 85.0, 'quality_score': 91.0, 'hour': 14, 'day_of_week': 2,
+    'device_type_enc': device_type_enc, 'metric_delta': 1.2, 'quality_delta': -0.5,
+    'fw_major': 2,
+    # ... metric_mean_5/10/20, metric_std_5/10/20, quality_mean_5/10/20, fault_rate_5/10/20
+}
+X = pd.DataFrame([row])
 
-# Anomaly score
-anomaly = -iso['model'].score_samples(x[:, :len(iso['features'])])[0]
-print(f'Anomaly score: {anomaly:.4f}')
+prob    = clf['model'].predict_proba(X[clf['features']])[0, 1]
+anomaly = -iso['model'].score_samples(X[iso['features']])[0]
+print(f'Fault probability: {prob:.1%}   Anomaly score: {anomaly:.4f}')
 ```
 
-The `label_encoder` stored in `clf['label_encoder']` encodes `device_type` strings to integers. Use `label_encoder.transform(['vibration_sensor'])` to get the correct integer before building your feature row.
+Selecting columns with `X[clf['features']]` / `X[iso['features']]` guarantees each model sees its features in the order it was trained on — the same thing `predict.py` and `realtime_inference.py` do.
 
 ---
 
