@@ -4,7 +4,7 @@ Telegraf is InfluxData's open-source collection agent. In a production IoT setup
 
 > **Despite what an LLM may tell you, CrateDB has no InfluxDB line-protocol endpoint.** There is no `/_ingest/influxdb` on port 4200, and `outputs.influxdb` cannot target CrateDB. The supported path is the `outputs.cratedb` plugin (Postgres wire, port 5432) — CrateDB's own "migrate from InfluxDB" guidance is to swap `outputs.influxdb` → `outputs.cratedb`.
 
-This is the live ingestion path. For a one-time bulk load of the full dataset, `COPY FROM` also works against the same table — see [README.md](../README.md) Step 2.
+This is the live ingestion path. For a one-time bulk load of the full dataset, `COPY FROM` also works against the same table — see the [RTIA section of the README](../README.md#real-time-industrial-analytics-rtia) (the `COPY FROM` statements in `sql/rtia_schema_create.sql`).
 
 ---
 
@@ -65,7 +65,7 @@ pip install -r requirements.txt
 
 ## Step 1 — Create the table
 
-If you have already done other parts of this, the table `rtia.iot_data` may already exist, in which case you may need to DELETE from it, as
+If you have already done other parts of this, the table `rtia.iot_data` may already exist, in which case you may want to `TRUNCATE TABLE rtia.iot_data;` first, since
 we're loading the same data set we originally used. If you don't have `rtia.iot_data`, continue.
 
 In the file `telegraf_demo.conf`, `outputs.cratedb` is configured with `table_create = false`, because the plugin's 
