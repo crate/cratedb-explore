@@ -131,6 +131,15 @@ def _ensure_predictions_table():
         conn.commit()
 
 
+def _fmt_ts(v):
+    """Format a CrateDB TIMESTAMP for JSON. The sqlalchemy-cratedb dialect
+    returns timestamps as epoch-millisecond integers; render them as a readable
+    'YYYY-MM-DD HH:MM:SS' string (and tolerate None / already-parsed values)."""
+    if v is None:
+        return None
+    return pd.to_datetime(int(v), unit='ms').strftime('%Y-%m-%d %H:%M:%S')
+
+
 def _fetch_context(device_id: str) -> pd.DataFrame:
     """
     Fetch the last CONTEXT_ROWS readings for a device from CrateDB.
@@ -251,7 +260,7 @@ def _score_device(device_id: str) -> dict:
         'device_id':          device_id,
         'device_type':        last['device_type'],
         'plant_id':           last['plant_id'],
-        'latest_reading_ts':  str(last['timestamp']),
+        'latest_reading_ts':  _fmt_ts(last['timestamp']),
         'current_status':     last['status'],
         'fault_probability':  round(fault_prob, 4),
         'fault_risk_label':   risk_label,
@@ -379,10 +388,14 @@ def fleet_high_risk(threshold: float = 0.6, limit: int = 20):
         cols   = ['device_id', 'device_type', 'plant_id', 'current_status',
                   'fault_probability', 'fault_risk_label', 'anomaly_score', 'scored_at']
 
+    devices = [dict(zip(cols, r)) for r in rows]
+    for d in devices:
+        d['scored_at'] = _fmt_ts(d['scored_at'])
+
     return {
         'threshold': threshold,
         'count':     len(rows),
-        'devices':   [dict(zip(cols, r)) for r in rows],
+        'devices':   devices,
     }
 
 
