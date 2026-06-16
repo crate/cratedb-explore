@@ -16,6 +16,7 @@ module stays cheap (train_model.py keeps its heavy imports lazy on purpose).
 """
 
 import os
+import re
 
 # Flat columns every loader returns — the contract the feature code relies on.
 SELECT_COLUMNS = """
@@ -115,31 +116,76 @@ def _read_frame(engine, sql: str, params=None):
     return df.sort_values(['device_id', 'timestamp']).reset_index(drop=True)
 
 
-def load_training_frame(engine, days=None):
-    """Full per-reading history for training.
+def _time_filter(days):
+    """WHERE clause for the training window, shared by the loaders.
 
-    `days` limits to the last N days relative to wall-clock NOW(); 0 (or
-    negative) pulls everything. When `days` is None (the default), the window is
-    anchored to the *latest reading in the table* instead — the demo dataset's
-    timestamps can predate "now", which would make a NOW()-relative window
-    return nothing.
+    `days` is None  -> last 90 days relative to the *latest reading* (the demo
+                       dataset's timestamps can predate wall-clock NOW()).
+    `days` > 0      -> last N days relative to NOW().
+    `days` <= 0     -> no filter (all history).
     """
     if days is None:
-        # Last 90 days relative to the newest reading, computed in SQL.
-        where = ('WHERE "timestamp" >= '
-                 '(SELECT MAX("timestamp") FROM rtia.iot_data) - INTERVAL \'90\' DAY')
-    elif days > 0:
-        where = f'WHERE "timestamp" >= NOW() - INTERVAL \'{int(days)}\' DAY'
-    else:
-        where = ''   # days <= 0 → all history
+        return ('WHERE "timestamp" >= '
+                '(SELECT MAX("timestamp") FROM rtia.iot_data) - INTERVAL \'90\' DAY')
+    if days > 0:
+        return f'WHERE "timestamp" >= NOW() - INTERVAL \'{int(days)}\' DAY'
+    return ''
 
+
+def load_training_frame(engine, days=None):
+    """Full per-reading history for training (see _time_filter for `days`)."""
     sql = f"""
     SELECT {SELECT_COLUMNS}
     FROM rtia.iot_data
-    {where}
+    {_time_filter(days)}
     ORDER BY tags['device_id'], "timestamp"
     """
     return _read_frame(engine, sql)
+
+
+# Matches a CrateDB INTERVAL literal like '1 day' / '6 hours' / '30 minutes'.
+_INTERVAL_RE = re.compile(r'^\d+\s+(second|minute|hour|day|week)s?$', re.IGNORECASE)
+
+
+def load_aggregated_frame(engine, window='1 day', days=None):
+    """Per-device, per-time-window feature aggregates computed in CrateDB
+    (Scenario 2 in ML_GUIDE.md).
+
+    Returns one row per (device, window) with metric mean/std, quality mean,
+    fault_rate, and had_fault — the heavy rolling work pushed into the database
+    so pandas only ever sees the compact result. `window` is any CrateDB
+    INTERVAL literal (e.g. '1 day', '6 hours'); `days` matches load_training_frame.
+    """
+    if not _INTERVAL_RE.match(window.strip()):
+        raise SystemExit(
+            f"--window {window!r} is not a valid interval — use e.g. '1 day', "
+            f"'6 hours', '30 minutes'.")
+
+    sql = f"""
+    SELECT
+        tags['device_id']    AS device_id,
+        tags['device_type']  AS device_type,
+        tags['plant_id']     AS plant_id,
+        DATE_BIN('{window}'::INTERVAL, "timestamp", TIMESTAMP '1970-01-01')
+            AS window_start,
+        AVG(fields['metric_value'])    AS metric_mean,
+        STDDEV(fields['metric_value']) AS metric_std,
+        AVG(fields['quality_score'])   AS quality_mean,
+        COUNT(*) FILTER (WHERE tags['status'] IN ('warning', 'critical'))
+            * 1.0 / NULLIF(COUNT(*), 0) AS fault_rate,
+        MAX(CASE WHEN tags['status'] IN ('warning', 'critical') THEN 1 ELSE 0 END)
+            AS had_fault,
+        COUNT(*)             AS n_readings
+    FROM rtia.iot_data
+    {_time_filter(days)}
+    GROUP BY tags['device_id'], tags['device_type'], tags['plant_id'], window_start
+    ORDER BY tags['device_id'], window_start
+    """
+    df = _query(engine, sql)
+    if df.empty:
+        return df
+    df['window_start'] = _coerce_timestamp(df['window_start'])
+    return df.sort_values(['device_id', 'window_start']).reset_index(drop=True)
 
 
 def load_scoring_frame(engine, device=None, context_rows=50):

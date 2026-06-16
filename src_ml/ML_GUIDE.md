@@ -387,7 +387,7 @@ DEVICE_0001` to score a single device.
 
 ### Scenario 1 — Scheduled retraining on recent data
 
-`train_model.py --cratedb-url crate://localhost:4200 --days 90` pulls the last 90 days straight from CrateDB instead of the file (omit `--days` to use the DB-anchored default described above). Everything downstream (feature engineering, training) stays identical. Under the hood the script runs this query (in `data_source.load_training_frame`):
+`train_model.py --cratedb-url crate://localhost:4200 ` pulls the last 90 days straight from CrateDB instead of the file (omit `--days` to use the DB-anchored default described above). Everything downstream (feature engineering, training) stays identical. Under the hood the script runs this query (in `data_source.load_training_frame`):
 
 ```sql
 SELECT
@@ -422,31 +422,36 @@ Run this on a schedule (weekly, nightly) and the model always reflects the curre
 
 Rolling statistics over 500,000 rows in pandas requires loading every raw reading into memory. CrateDB can pre-compute `DATE_BIN` windows, fault rates, and averages in the database, then hand a compact feature table to pandas. This is substantially faster and uses a fraction of the RAM.
 
-This is an advanced, manual pattern — it changes the feature schema, so it isn't wired into the scripts' `--cratedb-url` path, but the query runs as-is against `rtia.iot_data`.
+This is implemented as a standalone script, `train_aggregated.py` (it changes the feature schema, so it's separate from `train_model.py`'s `--cratedb-url` path rather than folded into it):
 
-```python
-sql = """
-    SELECT
-        tags['device_id']                 AS device_id,
-        tags['device_type']               AS device_type,
-        tags['plant_id']                  AS plant_id,
-        DATE_BIN('1 hour'::INTERVAL, "timestamp", TIMESTAMP '2025-09-01') AS window_start,
-        AVG(fields['metric_value'])                                AS metric_mean,
-        STDDEV(fields['metric_value'])                             AS metric_std,
-        AVG(fields['quality_score'])                               AS quality_mean,
-        COUNT(*) FILTER (WHERE tags['status'] IN ('warning','critical'))
-            * 1.0 / NULLIF(COUNT(*), 0)                           AS fault_rate,
-        MAX(CASE WHEN tags['status'] IN ('warning','critical') THEN 1 ELSE 0 END) AS had_fault
-    FROM rtia.iot_data
-    WHERE "timestamp" >= TIMESTAMP '2025-09-01'
-    GROUP BY tags['device_id'], tags['device_type'], tags['plant_id'], window_start
-    ORDER BY tags['device_id'], window_start
-"""
-
-df = pd.read_sql(sql, engine)
+```bash
+export CRATE_USER=... CRATE_PASSWORD=...
+python train_aggregated.py --cratedb-url crate://localhost:4200            # 1-day windows
+python train_aggregated.py --cratedb-url crate://localhost:4200 --window '6 hours'
 ```
 
-Each row is now one device-hour window. The model trains on `metric_mean`, `metric_std`, `quality_mean`, `fault_rate` directly — no rolling transform needed in Python. `had_fault` becomes the target.
+The query it runs (in `data_source.load_aggregated_frame`):
+
+```sql
+SELECT
+    tags['device_id']    AS device_id,
+    tags['device_type']  AS device_type,
+    tags['plant_id']     AS plant_id,
+    DATE_BIN('1 day'::INTERVAL, "timestamp", TIMESTAMP '1970-01-01') AS window_start,
+    AVG(fields['metric_value'])    AS metric_mean,
+    STDDEV(fields['metric_value']) AS metric_std,
+    AVG(fields['quality_score'])   AS quality_mean,
+    COUNT(*) FILTER (WHERE tags['status'] IN ('warning', 'critical'))
+        * 1.0 / NULLIF(COUNT(*), 0) AS fault_rate,
+    MAX(CASE WHEN tags['status'] IN ('warning', 'critical') THEN 1 ELSE 0 END) AS had_fault,
+    COUNT(*)             AS n_readings
+FROM rtia.iot_data
+WHERE "timestamp" >= (SELECT MAX("timestamp") FROM rtia.iot_data) - INTERVAL '90' DAY
+GROUP BY tags['device_id'], tags['device_type'], tags['plant_id'], window_start
+ORDER BY tags['device_id'], window_start
+```
+
+Each row is now one device-window aggregate, so the model trains on `metric_mean`, `metric_std`, `quality_mean`, `fault_rate` directly — no rolling transform needed in Python. The demo data is hourly, so the default window is `'1 day'` (≈24 readings each); `'1 hour'` would be degenerate (one reading per window, `metric_std` always NULL). The script's target is whether the **next** window has a fault: `had_fault` shifted forward one window per device — using it as a *same-window* target would leak, since it is derived from the same statuses as `fault_rate`.
 
 This pattern scales to hundreds of millions of rows because CrateDB distributes the aggregation across shards before any data crosses the network.
 
@@ -708,6 +713,7 @@ src_ml/
 ├── ML_GUIDE.md             ← this guide
 ├── requirements.txt        ← Python dependencies
 ├── train_model.py          ← training pipeline (run once)
+├── train_aggregated.py     ← Scenario 2: train on CrateDB-side aggregates
 ├── predict.py              ← batch scoring (run on new data)
 ├── data_source.py          ← optional CrateDB loader (--cratedb-url)
 ├── use_models_example.py   ← minimal "use the models" example
