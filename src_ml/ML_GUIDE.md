@@ -353,52 +353,52 @@ pip install -r requirements.txt
 `sqlalchemy-cratedb` registers the `crate://` SQLAlchemy dialect (and pulls in
 the official `crate` client); `sqlalchemy` itself backs `pandas.read_sql()`.
 
+Both `train_model.py` and `predict.py` build the engine for you: pass the host
+with `--cratedb-url` (or the `CRATEDB_URL` env var) and supply credentials via
+the `CRATE_USER` / `CRATE_PASSWORD` environment variables, so passwords never
+land in your shell history or `ps` output. The local JSON file stays the default
+— the CrateDB URL is purely additive.
+
 **CrateDB local / Docker:**
 
-```python
-from sqlalchemy import create_engine
-engine = create_engine("crate://localhost:4200")
+```bash
+python train_model.py --cratedb-url crate://localhost:4200 --days 90
+python predict.py     --cratedb-url crate://localhost:4200
 ```
 
 **CrateDB Cloud:**
 
-```python
-engine = create_engine(
-    "crate://admin:<password>@<your-cluster>.cratedb.net:4200",
-    connect_args={"verify_ssl_cert": True}
-)
+```bash
+export CRATE_USER=admin CRATE_PASSWORD='<password>'
+export CRATEDB_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
+python train_model.py        # picks up CRATEDB_URL automatically
 ```
+
+`--days N` (training) limits the pull to the last *N* days; `--days 0` pulls all
+history. The window is relative to **now**, so a static demo dataset with older
+timestamps needs `--days 0`. `predict.py` pulls the last 50 readings per device
+for rolling context — add `--device DEVICE_0001` to score a single device.
 
 ---
 
 ### Scenario 1 — Scheduled retraining on recent data
 
-Replace the JSON file read in `train_model.py` with a SQL query that pulls the last 90 days. Everything downstream (feature engineering, training) stays identical.
+`train_model.py --cratedb-url crate://localhost:4200 --days 90` pulls the last 90 days straight from CrateDB instead of the file. Everything downstream (feature engineering, training) stays identical. Under the hood the script runs this query (in `data_source.load_training_frame`):
 
-```python
-import pandas as pd
-from sqlalchemy import create_engine
-
-engine = create_engine("crate://localhost:4200")
-
-sql = """
-    SELECT
-        tags['device_id']                 AS device_id,
-        tags['device_type']               AS device_type,
-        tags['plant_id']                  AS plant_id,
-        "timestamp",
-        fields['metric_value']            AS metric_value,
-        tags['metric_unit']               AS metric_unit,
-        tags['status']                    AS status,
-        fields['quality_score']           AS quality_score,
-        tags['metadata_firmware_version'] AS firmware_version
-    FROM rtia.iot_data
-    WHERE "timestamp" >= NOW() - INTERVAL '90' DAY
-    ORDER BY tags['device_id'], "timestamp"
-"""
-
-df = pd.read_sql(sql, engine)
-print(f"{len(df):,} rows loaded from CrateDB")
+```sql
+SELECT
+    tags['device_id']                 AS device_id,
+    tags['device_type']               AS device_type,
+    tags['plant_id']                  AS plant_id,
+    "timestamp",
+    fields['metric_value']            AS metric_value,
+    tags['metric_unit']               AS metric_unit,
+    tags['status']                    AS status,
+    fields['quality_score']           AS quality_score,
+    tags['metadata_firmware_version'] AS firmware_version
+FROM rtia.iot_data
+WHERE "timestamp" >= NOW() - INTERVAL '90' DAY   -- omitted when --days 0
+ORDER BY tags['device_id'], "timestamp"
 ```
 
 `rtia.iot_data` stores the readings in Telegraf's line-protocol shape — strings
@@ -414,6 +414,8 @@ Run this on a schedule (weekly, nightly) and the model always reflects the curre
 ### Scenario 2 — Push feature aggregation into CrateDB
 
 Rolling statistics over 500,000 rows in pandas requires loading every raw reading into memory. CrateDB can pre-compute `DATE_BIN` windows, fault rates, and averages in the database, then hand a compact feature table to pandas. This is substantially faster and uses a fraction of the RAM.
+
+This is an advanced, manual pattern — it changes the feature schema, so it isn't wired into the scripts' `--cratedb-url` path, but the query runs as-is against `rtia.iot_data`.
 
 ```python
 sql = """
@@ -445,7 +447,7 @@ This pattern scales to hundreds of millions of rows because CrateDB distributes 
 
 ### Scenario 3 — Live batch scoring against the current fleet state
 
-Score the most recent reading per device without exporting any file. Pull, score, and optionally write the predictions back to CrateDB in a single pipeline.
+`predict.py --cratedb-url crate://localhost:4200` already does the pull-and-score half of this — it loads the last 50 readings per device from CrateDB, scores them, and writes `model/scored_batch.csv` (add `--device DEVICE_0001` for one device). The pipeline below is the fuller version that also writes the predictions *back* to CrateDB's `fault_predictions` table in one pass.
 
 ```python
 import pickle
@@ -700,6 +702,8 @@ src_ml/
 ├── requirements.txt        ← Python dependencies
 ├── train_model.py          ← training pipeline (run once)
 ├── predict.py              ← batch scoring (run on new data)
+├── data_source.py          ← optional CrateDB loader (--cratedb-url)
+├── use_models_example.py   ← minimal "use the models" example
 ├── realtime_inference.py   ← FastAPI inference service (optional)
 └── model/                  ← created by train_model.py
     ├── predictive_maintenance_model.pkl

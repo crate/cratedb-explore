@@ -194,75 +194,99 @@ def build_features(df: pd.DataFrame, label_encoder) -> pd.DataFrame:
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
-def main(input_file: str, device_filter, n_rows: int):
-    print('CrateDB Industrial IoT - Batch Scoring')
-
-    # Check the models exist before doing any slow work (no point downloading a
-    # 240 MB dataset only to fail because training hasn't been run).
-    for path in [CLF_FILE, ISO_FILE]:
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                f'{path} not found — run:  python train_model.py')
-
-    # Fetch the dataset (if it's the default input and missing) concurrently
-    # with importing the heavy stack and unpickling the models: the download is
-    # network-bound and needs only stdlib, while the import/unpickle is
-    # CPU/disk-bound and slow on a cold cache. A background thread overlaps the
-    # two first-run waits instead of serialising them.
-    dl_error = []
-
-    def _download():
-        try:
-            if os.path.abspath(input_file) == os.path.abspath(DATA_FILE):
-                ensure_dataset(input_file)
-        except BaseException as exc:   # surfaced on the main thread below
-            dl_error.append(exc)
-
-    downloader = threading.Thread(target=_download)
-    downloader.start()
-
-    print('Importing pandas + loading models (slow on a cold cache) ...')
-    import_heavy_libs()
+def _load_models():
+    """Unpickle both models and print a short summary."""
     with open(CLF_FILE, 'rb') as f:
         clf_p = pickle.load(f)
     with open(ISO_FILE, 'rb') as f:
         iso_p = pickle.load(f)
-
     print(f'Models loaded:')
     print(f'  Classifier:       {clf_p["model_name"]}  '
           f'(ROC-AUC on test set: {clf_p.get("roc_auc", "n/a")})')
     print(f'  Anomaly detector: {iso_p["model_name"]}')
     print(f'  Fault horizon:    {clf_p["horizon"]} readings')
+    return clf_p, iso_p
 
-    downloader.join()
-    if dl_error:
-        raise dl_error[0]
 
-    # Load batch
-    print(f'\nLoading data from {os.path.basename(input_file)} ...')
-    records = []
-    with open(input_file, encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                records.append(json.loads(line))
+def main(input_file: str, device_filter, n_rows: int, cratedb_url=None):
+    print('CrateDB Industrial IoT - Batch Scoring')
 
-    df = flatten_records(records)
+    # Check the models exist before doing any slow work (no point fetching data
+    # only to fail because training hasn't been run).
+    for path in [CLF_FILE, ISO_FILE]:
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f'{path} not found — run:  python train_model.py')
 
-    if device_filter:
-        df = df[df['device_id'] == device_filter]
+    if cratedb_url:
+        # CrateDB source: import the stack, load the models, then pull the last
+        # 50 readings per device (optionally one device) straight from the DB.
+        print('Importing pandas + loading models (slow on a cold cache) ...')
+        import_heavy_libs()
+        clf_p, iso_p = _load_models()
+
+        import data_source
+        print(f'\nQuerying CrateDB at {cratedb_url} ...')
+        engine = data_source.make_engine(cratedb_url)
+        df = data_source.load_scoring_frame(engine, device=device_filter,
+                                            context_rows=50)
         if df.empty:
-            raise ValueError(f'Device {device_filter} not found in dataset.')
-        print(f'  Filtered to device {device_filter}: {len(df)} rows')
+            raise SystemExit(
+                'CrateDB returned no rows — check the URL'
+                + (f' and that device {device_filter} exists' if device_filter else '')
+                + '.')
+        print(f'  {len(df):,} rows  |  {df["device_id"].nunique()} devices '
+              f'(last 50 readings each) loaded from CrateDB')
     else:
-        # Sample last n_rows per device to keep context for rolling features
-        # but cap total for speed
-        df['timestamp_parsed'] = pd.to_datetime(df['timestamp'])
-        df = (df.sort_values('timestamp_parsed')
-                .groupby('device_id', sort=False)
-                .tail(50)            # keep last 50 readings per device for rolling context
-                .reset_index(drop=True))
-        print(f'  Using last 50 readings per device: {len(df):,} rows')
+        # File source. Fetch the dataset (if it's the default input and missing)
+        # concurrently with importing the heavy stack and unpickling the models:
+        # the download is network-bound and needs only stdlib, while the
+        # import/unpickle is CPU/disk-bound and slow on a cold cache. A
+        # background thread overlaps the two first-run waits.
+        dl_error = []
+
+        def _download():
+            try:
+                if os.path.abspath(input_file) == os.path.abspath(DATA_FILE):
+                    ensure_dataset(input_file)
+            except BaseException as exc:   # surfaced on the main thread below
+                dl_error.append(exc)
+
+        downloader = threading.Thread(target=_download)
+        downloader.start()
+
+        print('Importing pandas + loading models (slow on a cold cache) ...')
+        import_heavy_libs()
+        clf_p, iso_p = _load_models()
+
+        downloader.join()
+        if dl_error:
+            raise dl_error[0]
+
+        # Load batch
+        print(f'\nLoading data from {os.path.basename(input_file)} ...')
+        records = []
+        with open(input_file, encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    records.append(json.loads(line))
+
+        df = flatten_records(records)
+
+        if device_filter:
+            df = df[df['device_id'] == device_filter]
+            if df.empty:
+                raise ValueError(f'Device {device_filter} not found in dataset.')
+            print(f'  Filtered to device {device_filter}: {len(df)} rows')
+        else:
+            # Last readings per device to keep context for rolling features
+            df['timestamp_parsed'] = pd.to_datetime(df['timestamp'])
+            df = (df.sort_values('timestamp_parsed')
+                    .groupby('device_id', sort=False)
+                    .tail(50)            # keep last 50 readings per device for rolling context
+                    .reset_index(drop=True))
+            print(f'  Using last 50 readings per device: {len(df):,} rows')
 
     # Build features
     df = build_features(df, clf_p['label_encoder'])
@@ -315,5 +339,13 @@ if __name__ == '__main__':
                         help='Score only this device_id')
     parser.add_argument('--rows',   type=int, default=2000,
                         help='Max rows to score (default: 2000)')
+    parser.add_argument('--cratedb-url', default=os.getenv('CRATEDB_URL'),
+                        help='Score from CrateDB instead of the file, e.g. '
+                             'crate://localhost:4200 (credentials via CRATE_USER / '
+                             'CRATE_PASSWORD env). Env: CRATEDB_URL')
     args = parser.parse_args()
-    main(args.input, args.device, args.rows)
+
+    if args.cratedb_url and os.path.abspath(args.input) != os.path.abspath(DATA_FILE):
+        parser.error('specify either --input or --cratedb-url, not both')
+
+    main(args.input, args.device, args.rows, cratedb_url=args.cratedb_url)

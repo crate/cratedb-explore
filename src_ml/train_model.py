@@ -441,37 +441,56 @@ def train_anomaly_detector(df: pd.DataFrame):
 # MAIN
 # -----------------------------------------------------------------------------
 
-def main():
+def main(cratedb_url=None, days=90, input_file=DATA_FILE):
     print('=' * 70)
     print('CrateDB Industrial IoT - Predictive Maintenance Training Pipeline')
     print('=' * 70)
     t_total = time.time()
 
-    # Fetch the dataset (if missing) and import the heavy ML stack concurrently:
-    # the S3 download is network-bound and needs only stdlib, while the
-    # pandas/sklearn import is CPU/disk-bound and costs ~30s on a cold cache.
-    # Running the download in a background thread overlaps the two first-run
-    # waits instead of serialising them.
-    dl_error = []
+    if cratedb_url:
+        # CrateDB source: no file to download, so just pay the import cost then
+        # pull the per-reading history straight into a DataFrame.
+        print('Importing pandas + scikit-learn (~30s on a cold cache) ...')
+        import_heavy_libs()
 
-    def _download():
-        try:
-            ensure_dataset(DATA_FILE)
-        except BaseException as exc:   # surfaced on the main thread below
-            dl_error.append(exc)
+        import data_source
+        print(f'Querying CrateDB at {cratedb_url} '
+              f'({"last %d days" % days if days and days > 0 else "all history"}) ...')
+        engine = data_source.make_engine(cratedb_url)
+        df = data_source.load_training_frame(engine, days=days)
+        if df.empty:
+            raise SystemExit('CrateDB returned no rows — check the URL, the '
+                             'rtia.iot_data table, and the --days window.')
+        print(f'  {len(df):,} rows  |  {df["device_id"].nunique()} devices '
+              f'loaded from CrateDB')
+    else:
+        # File source. Fetch the dataset (if missing) and import the heavy ML
+        # stack concurrently: the S3 download is network-bound and needs only
+        # stdlib, while the pandas/sklearn import is CPU/disk-bound and costs
+        # ~30s on a cold cache. Running the download in a background thread
+        # overlaps the two first-run waits instead of serialising them.
+        dl_error = []
 
-    downloader = threading.Thread(target=_download)
-    downloader.start()
+        def _download():
+            try:
+                # Only the canonical dataset is auto-fetched; a missing custom
+                # --input is left to fail as a genuine error.
+                if os.path.abspath(input_file) == os.path.abspath(DATA_FILE):
+                    ensure_dataset(input_file)
+            except BaseException as exc:   # surfaced on the main thread below
+                dl_error.append(exc)
 
-    print('Importing pandas + scikit-learn (~30s on a cold cache) ...')
-    import_heavy_libs()
+        downloader = threading.Thread(target=_download)
+        downloader.start()
 
-    downloader.join()
-    if dl_error:
-        raise dl_error[0]
+        print('Importing pandas + scikit-learn (~30s on a cold cache) ...')
+        import_heavy_libs()
 
-    # Load
-    df = load_data(DATA_FILE)
+        downloader.join()
+        if dl_error:
+            raise dl_error[0]
+
+        df = load_data(input_file)
 
     # Feature engineering
     df, label_encoder = engineer_features(df)
@@ -507,4 +526,23 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Train the predictive-maintenance and anomaly-detection models.')
+    parser.add_argument(
+        '--input', default=DATA_FILE,
+        help='NDJSON dataset path (default: data/iot_demo_dataset.json)')
+    parser.add_argument(
+        '--cratedb-url', default=os.getenv('CRATEDB_URL'),
+        help='Train from CrateDB instead of the file, e.g. crate://localhost:4200 '
+             '(credentials via CRATE_USER / CRATE_PASSWORD env). Env: CRATEDB_URL')
+    parser.add_argument(
+        '--days', type=int, default=90,
+        help='With --cratedb-url: pull the last N days (0 = all history). Default: 90')
+    args = parser.parse_args()
+
+    if args.cratedb_url and os.path.abspath(args.input) != os.path.abspath(DATA_FILE):
+        parser.error('specify either --input or --cratedb-url, not both')
+
+    main(cratedb_url=args.cratedb_url, days=args.days, input_file=args.input)
