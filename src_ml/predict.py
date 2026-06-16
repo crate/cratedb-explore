@@ -25,16 +25,23 @@ To use the model programmatically (e.g. from a CrateDB UDF or API):
     print(f'Fault probability (next {p["horizon"]} readings): {prob:.1%}')
 """
 
+# Annotations are lazy (PEP 563) so the pandas names used in function
+# signatures below don't force that heavy import at module-load time.
+from __future__ import annotations
+
 import argparse
 import json
 import os
 import pickle
+import threading
 import time
 import urllib.request
 import warnings
 
-import numpy as np
-import pandas as pd
+# NOTE: numpy / pandas are imported lazily by import_heavy_libs() rather than
+# here — on a cold filesystem cache that import (plus the sklearn/xgboost pulled
+# in when unpickling the models) is slow, and deferring it lets a first-run S3
+# download run concurrently (see main()).
 
 warnings.filterwarnings('ignore')
 
@@ -48,6 +55,18 @@ OUT_FILE    = os.path.join(BASE, 'model', 'scored_batch.csv')
 
 STATUS_CODE = {'normal': 0, 'warning': 1, 'critical': 2, 'offline': -1}
 WINDOWS     = [5, 10, 20]
+
+
+def import_heavy_libs() -> None:
+    """Import numpy / pandas and bind them at module scope.
+
+    Kept out of the top-level imports so it can run after the S3 dataset
+    download starts — overlapping the two first-run waits instead of
+    serialising them (see main()). Idempotent: re-importing is cheap.
+    """
+    global np, pd
+    import numpy as np
+    import pandas as pd
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -176,12 +195,34 @@ def build_features(df: pd.DataFrame, label_encoder) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main(input_file: str, device_filter, n_rows: int):
-    # Load models
+    print('CrateDB Industrial IoT - Batch Scoring')
+
+    # Check the models exist before doing any slow work (no point downloading a
+    # 240 MB dataset only to fail because training hasn't been run).
     for path in [CLF_FILE, ISO_FILE]:
         if not os.path.exists(path):
             raise FileNotFoundError(
                 f'{path} not found — run:  python train_model.py')
 
+    # Fetch the dataset (if it's the default input and missing) concurrently
+    # with importing the heavy stack and unpickling the models: the download is
+    # network-bound and needs only stdlib, while the import/unpickle is
+    # CPU/disk-bound and slow on a cold cache. A background thread overlaps the
+    # two first-run waits instead of serialising them.
+    dl_error = []
+
+    def _download():
+        try:
+            if os.path.abspath(input_file) == os.path.abspath(DATA_FILE):
+                ensure_dataset(input_file)
+        except BaseException as exc:   # surfaced on the main thread below
+            dl_error.append(exc)
+
+    downloader = threading.Thread(target=_download)
+    downloader.start()
+
+    print('Importing pandas + loading models (slow on a cold cache) ...')
+    import_heavy_libs()
     with open(CLF_FILE, 'rb') as f:
         clf_p = pickle.load(f)
     with open(ISO_FILE, 'rb') as f:
@@ -193,9 +234,11 @@ def main(input_file: str, device_filter, n_rows: int):
     print(f'  Anomaly detector: {iso_p["model_name"]}')
     print(f'  Fault horizon:    {clf_p["horizon"]} readings')
 
-    # Load batch — auto-download the canonical dataset if it's the default input
-    if os.path.abspath(input_file) == os.path.abspath(DATA_FILE):
-        ensure_dataset(input_file)
+    downloader.join()
+    if dl_error:
+        raise dl_error[0]
+
+    # Load batch
     print(f'\nLoading data from {os.path.basename(input_file)} ...')
     records = []
     with open(input_file, encoding='utf-8') as f:

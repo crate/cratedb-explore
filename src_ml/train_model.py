@@ -24,20 +24,21 @@ Outputs (written to model/ directory):
   test_predictions.csv              - scored test-set rows for inspection
 """
 
+# Annotations are lazy (PEP 563) so the pandas/sklearn names used in function
+# signatures below don't force those heavy imports at module-load time.
+from __future__ import annotations
+
 import json
 import os
 import pickle
+import threading
 import time
 import urllib.request
 import warnings
 
-import numpy as np
-import pandas as pd
-from sklearn.ensemble import GradientBoostingClassifier, IsolationForest
-from sklearn.metrics import (classification_report, confusion_matrix,
-                              roc_auc_score)
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
+# NOTE: numpy / pandas / scikit-learn are imported lazily by import_heavy_libs()
+# rather than here. On a cold filesystem cache that import costs ~30s, and
+# deferring it lets the first-run S3 download run concurrently (see main()).
 
 warnings.filterwarnings('ignore')
 
@@ -53,6 +54,28 @@ HORIZON    = 5      # predict fault within next N readings per device
 WINDOWS    = [5, 10, 20]   # rolling window sizes for feature engineering
 TEST_SIZE  = 0.2    # fraction of devices held out for evaluation
 SEED       = 42
+
+
+def import_heavy_libs() -> None:
+    """Import numpy / pandas / scikit-learn and bind them at module scope.
+
+    Kept out of the top-level imports so it can be triggered explicitly after
+    the S3 dataset download starts — on a cold filesystem cache this import
+    alone takes ~30s, and overlapping it with the download halves first-run
+    wall time. Idempotent: re-importing already-loaded modules is cheap.
+    """
+    global np, pd
+    global GradientBoostingClassifier, IsolationForest
+    global classification_report, confusion_matrix, roc_auc_score
+    global train_test_split, LabelEncoder
+
+    import numpy as np
+    import pandas as pd
+    from sklearn.ensemble import GradientBoostingClassifier, IsolationForest
+    from sklearn.metrics import (classification_report, confusion_matrix,
+                                 roc_auc_score)
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import LabelEncoder
 
 
 # -----------------------------------------------------------------------------
@@ -423,6 +446,29 @@ def main():
     print('CrateDB Industrial IoT - Predictive Maintenance Training Pipeline')
     print('=' * 70)
     t_total = time.time()
+
+    # Fetch the dataset (if missing) and import the heavy ML stack concurrently:
+    # the S3 download is network-bound and needs only stdlib, while the
+    # pandas/sklearn import is CPU/disk-bound and costs ~30s on a cold cache.
+    # Running the download in a background thread overlaps the two first-run
+    # waits instead of serialising them.
+    dl_error = []
+
+    def _download():
+        try:
+            ensure_dataset(DATA_FILE)
+        except BaseException as exc:   # surfaced on the main thread below
+            dl_error.append(exc)
+
+    downloader = threading.Thread(target=_download)
+    downloader.start()
+
+    print('Importing pandas + scikit-learn (~30s on a cold cache) ...')
+    import_heavy_libs()
+
+    downloader.join()
+    if dl_error:
+        raise dl_error[0]
 
     # Load
     df = load_data(DATA_FILE)
