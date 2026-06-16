@@ -441,7 +441,7 @@ def train_anomaly_detector(df: pd.DataFrame):
 # MAIN
 # -----------------------------------------------------------------------------
 
-def main(cratedb_url=None, days=90, input_file=DATA_FILE):
+def main(cratedb_url=None, days=None, input_file=DATA_FILE):
     print('=' * 70)
     print('CrateDB Industrial IoT - Predictive Maintenance Training Pipeline')
     print('=' * 70)
@@ -454,10 +454,30 @@ def main(cratedb_url=None, days=90, input_file=DATA_FILE):
         import_heavy_libs()
 
         import data_source
-        print(f'Querying CrateDB at {cratedb_url} '
-              f'({"last %d days" % days if days and days > 0 else "all history"}) ...')
         engine = data_source.make_engine(cratedb_url)
-        df = data_source.load_training_frame(engine, days=days)
+
+        since = None
+        if days is None:
+            # Unusual default: anchor the window to the DATA, not wall-clock
+            # NOW(). The demo dataset's timestamps can predate "now", which
+            # makes a NOW()-relative window return nothing. Use the oldest
+            # reading minus a 90-day pad as the cutoff (this spans all available
+            # history) and log it loudly so the behaviour is visible.
+            oldest = data_source.oldest_timestamp(engine)
+            if oldest is None:
+                raise SystemExit('CrateDB returned no rows — rtia.iot_data is empty.')
+            since = oldest - pd.Timedelta(days=90)
+            print(f'  [unusual default] no --days given: anchoring to the oldest '
+                  f'reading ({oldest:%Y-%m-%d}) minus 90 days = {since:%Y-%m-%d}, '
+                  f'which spans all available history.')
+            print(f'  (pass --days N for a NOW()-relative window, or --days 0 for '
+                  f'all history without the lookup.)')
+            window = f'since {since:%Y-%m-%d}'
+        else:
+            window = f'last {days} days' if days > 0 else 'all history'
+
+        print(f'Querying CrateDB at {cratedb_url} ({window}) ...')
+        df = data_source.load_training_frame(engine, days=days, since=since)
         if df.empty:
             raise SystemExit('CrateDB returned no rows — check the URL, the '
                              'rtia.iot_data table, and the --days window.')
@@ -538,8 +558,10 @@ if __name__ == '__main__':
         help='Train from CrateDB instead of the file, e.g. crate://localhost:4200 '
              '(credentials via CRATE_USER / CRATE_PASSWORD env). Env: CRATEDB_URL')
     parser.add_argument(
-        '--days', type=int, default=90,
-        help='With --cratedb-url: pull the last N days (0 = all history). Default: 90')
+        '--days', type=int, default=None,
+        help='With --cratedb-url: pull the last N days, NOW()-relative (0 = all '
+             'history). Default: anchor to the oldest reading in the DB minus 90 '
+             'days (spans all history) — logged at run time.')
     args = parser.parse_args()
 
     if args.cratedb_url and os.path.abspath(args.input) != os.path.abspath(DATA_FILE):

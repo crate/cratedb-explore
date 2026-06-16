@@ -84,37 +84,63 @@ def _connection_error(engine, exc):
     return SystemExit(f'Could not query CrateDB at {host}: {detail}')
 
 
-def _read_frame(engine, sql: str, params=None):
-    """Run a query and return a DataFrame with `timestamp` coerced to datetime
-    and rows ordered by (device_id, timestamp) — matching what the file-based
-    loaders hand to the feature code. Connection/auth failures become a clean
-    SystemExit instead of a noisy stack trace."""
+def _query(engine, sql: str, params=None):
+    """Run a query, turning a noisy connection/auth failure into a SystemExit."""
     import pandas as pd
     from sqlalchemy import text
     from sqlalchemy.exc import SQLAlchemyError
 
     try:
-        df = pd.read_sql(text(sql), engine, params=params)
+        return pd.read_sql(text(sql), engine, params=params)
     except SQLAlchemyError as exc:
         raise _connection_error(engine, exc) from exc
+
+
+def _coerce_timestamp(series):
+    """CrateDB may return TIMESTAMP as epoch milliseconds; coerce both shapes."""
+    import pandas as pd
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_datetime(series, unit='ms')
+    return pd.to_datetime(series)
+
+
+def _read_frame(engine, sql: str, params=None):
+    """Run a query and return a DataFrame with `timestamp` coerced to datetime
+    and rows ordered by (device_id, timestamp) — matching what the file-based
+    loaders hand to the feature code."""
+    df = _query(engine, sql, params=params)
     if df.empty:
         return df
-
-    ts = df['timestamp']
-    # CrateDB may return TIMESTAMP as epoch milliseconds; coerce both shapes.
-    if pd.api.types.is_numeric_dtype(ts):
-        df['timestamp'] = pd.to_datetime(ts, unit='ms')
-    else:
-        df['timestamp'] = pd.to_datetime(ts)
-
+    df['timestamp'] = _coerce_timestamp(df['timestamp'])
     return df.sort_values(['device_id', 'timestamp']).reset_index(drop=True)
 
 
-def load_training_frame(engine, days=90):
-    """Full per-reading history for training. `days` limits to the last N days
-    (None / <= 0 pulls everything)."""
+def oldest_timestamp(engine):
+    """Earliest reading timestamp in rtia.iot_data, or None if the table is
+    empty. Used to anchor train_model.py's default window to the data instead
+    of wall-clock NOW()."""
+    import pandas as pd
+    df = _query(engine, 'SELECT MIN("timestamp") AS oldest FROM rtia.iot_data')
+    val = df.iloc[0, 0] if not df.empty else None
+    if val is None or pd.isna(val):
+        return None
+    return _coerce_timestamp(pd.Series([val])).iloc[0]
+
+
+def load_training_frame(engine, days=None, since=None):
+    """Full per-reading history for training.
+
+    `since` (a datetime) filters to readings at or after an absolute cutoff and
+    takes precedence. Otherwise `days` limits to the last N days relative to
+    NOW(); None / <= 0 pulls everything.
+    """
     where = ''
-    if days and days > 0:
+    params = None
+    if since is not None:
+        import pandas as pd
+        where = 'WHERE "timestamp" >= :since'
+        params = {'since': pd.Timestamp(since).isoformat()}
+    elif days and days > 0:
         where = f'WHERE "timestamp" >= NOW() - INTERVAL \'{int(days)}\' DAY'
 
     sql = f"""
@@ -123,7 +149,7 @@ def load_training_frame(engine, days=90):
     {where}
     ORDER BY tags['device_id'], "timestamp"
     """
-    return _read_frame(engine, sql)
+    return _read_frame(engine, sql, params=params)
 
 
 def load_scoring_frame(engine, device=None, context_rows=50):

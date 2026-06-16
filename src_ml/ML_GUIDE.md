@@ -374,16 +374,20 @@ export CRATEDB_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
 python train_model.py        # picks up CRATEDB_URL automatically
 ```
 
-`--days N` (training) limits the pull to the last *N* days; `--days 0` pulls all
-history. The window is relative to **now**, so a static demo dataset with older
-timestamps needs `--days 0`. `predict.py` pulls the last 50 readings per device
-for rolling context — add `--device DEVICE_0001` to score a single device.
+`--days N` (training) limits the pull to the last *N* days **relative to now**
+(`--days 0` = all history). If you omit `--days`, `train_model.py` uses an
+unusual default: it looks up the oldest reading in the DB and anchors the window
+to *that* date minus 90 days (which spans all available history), logging the
+resolved range at run time. This avoids the trap where a static demo dataset
+with older-than-90-days timestamps makes a `NOW()`-relative window return
+nothing. `predict.py` pulls the last 50 readings per device for rolling context
+— add `--device DEVICE_0001` to score a single device.
 
 ---
 
 ### Scenario 1 — Scheduled retraining on recent data
 
-`train_model.py --cratedb-url crate://localhost:4200 --days 90` pulls the last 90 days straight from CrateDB instead of the file. Everything downstream (feature engineering, training) stays identical. Under the hood the script runs this query (in `data_source.load_training_frame`):
+`train_model.py --cratedb-url crate://localhost:4200 --days 90` pulls the last 90 days straight from CrateDB instead of the file (omit `--days` to use the DB-anchored default described above). Everything downstream (feature engineering, training) stays identical. Under the hood the script runs this query (in `data_source.load_training_frame`):
 
 ```sql
 SELECT
@@ -397,7 +401,9 @@ SELECT
     fields['quality_score']           AS quality_score,
     tags['metadata_firmware_version'] AS firmware_version
 FROM rtia.iot_data
-WHERE "timestamp" >= NOW() - INTERVAL '90' DAY   -- omitted when --days 0
+WHERE "timestamp" >= NOW() - INTERVAL '90' DAY   -- --days N; an absolute
+                                                 -- cutoff for the default,
+                                                 -- omitted when --days 0
 ORDER BY tags['device_id'], "timestamp"
 ```
 
