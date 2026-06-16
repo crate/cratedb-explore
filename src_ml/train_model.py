@@ -45,8 +45,8 @@ warnings.filterwarnings('ignore')
 # -- Config --------------------------------------------------------------------
 BASE       = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE  = os.path.join(BASE, '..', 'data', 'iot_demo_dataset.json')
-DATA_URL   = ('https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com'
-              '/iot_demo_dataset.json')
+S3_BUCKET  = 'iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com'
+DATA_URL   = f'https://{S3_BUCKET}/iot_demo_dataset.json'
 MODEL_DIR  = os.path.join(BASE, 'model')
 os.makedirs(MODEL_DIR, exist_ok=True)
 

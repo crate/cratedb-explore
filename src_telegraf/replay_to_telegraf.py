@@ -64,10 +64,8 @@ DATA_FILE = os.path.join(BASE, '..', 'data', 'iot_demo_dataset.json')
 
 # Canonical dataset (~240 MB, gitignored) — same S3 object the COPY FROM
 # statements in sql/rtia_schema_create.sql read. Downloaded on first run.
-DATASET_URL = (
-    "https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/"
-    "iot_demo_dataset.json"
-)
+S3_BUCKET = "iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com"
+DATASET_URL = f"https://{S3_BUCKET}/iot_demo_dataset.json"
 
 
 # ---------------------------------------------------------------------------
