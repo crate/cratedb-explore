@@ -460,7 +460,16 @@ This pattern scales to hundreds of millions of rows because CrateDB distributes 
 
 ### Scenario 3 — Live batch scoring against the current fleet state
 
-`predict.py --cratedb-url crate://localhost:4200` already does the pull-and-score half of this — it loads the last 50 readings per device from CrateDB, scores them, and writes `model/scored_batch.csv` (add `--device DEVICE_0001` for one device). The pipeline below is the fuller version that also writes the predictions *back* to CrateDB's `fault_predictions` table in one pass.
+This is implemented as `score_fleet_to_crate.py`: it pulls the last 50 readings per device, scores them with both models, collapses to one row per device (the current fleet state), and **always writes the predictions back to CrateDB's `fault_predictions` table**. The input may be CrateDB (default) or a local file (`--input`), but the output always lands in CrateDB:
+
+```bash
+export CRATE_USER=... CRATE_PASSWORD=...
+python score_fleet_to_crate.py --cratedb-url crate://localhost:4200                  # read CrateDB
+python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --input ../data/iot_demo_dataset.json
+python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --device DEVICE_0042
+```
+
+It creates `fault_predictions` with the canonical DDL (`CREATE TABLE IF NOT EXISTS`, the same schema `realtime_inference.py` uses) and appends — so the batch job and the live service share one table. The equivalent pipeline written out by hand:
 
 ```python
 import pickle
@@ -716,6 +725,7 @@ src_ml/
 ├── train_model.py          ← training pipeline (run once)
 ├── train_aggregated.py     ← Scenario 2: train on CrateDB-side aggregates
 ├── predict_aggregated.py   ← Scenario 2: score with the aggregated model
+├── score_fleet_to_crate.py ← Scenario 3: score fleet, write back to CrateDB
 ├── predict.py              ← batch scoring (run on new data)
 ├── data_source.py          ← optional CrateDB loader (--cratedb-url)
 ├── use_models_example.py   ← minimal "use the models" example
