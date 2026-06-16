@@ -108,6 +108,10 @@ CREATE TABLE IF NOT EXISTS rtia.iot_data (
 -- ─────────────────────────────────────────────────────────────────────────────
 -- IMPORT DATA
 -- Adjust the file path or URL to match your environment.
+-- The S3 bucket host below is repeated on each COPY line — SQL has no constant
+-- mechanism, so to point at a different bucket find-and-replace this host:
+--   iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com
+-- (the same value lives as the S3_BUCKET constant in the project's Python files).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 COPY rtia.plants           FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/plants.json'  WITH (format = 'json');
