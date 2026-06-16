@@ -29,6 +29,8 @@ import argparse
 import json
 import os
 import pickle
+import time
+import urllib.request
 import warnings
 
 import numpy as np
@@ -38,6 +40,8 @@ warnings.filterwarnings('ignore')
 
 BASE        = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE   = os.path.join(BASE, '..', 'data', 'iot_demo_dataset.json')
+DATA_URL    = ('https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com'
+               '/iot_demo_dataset.json')
 CLF_FILE    = os.path.join(BASE, 'model', 'predictive_maintenance_model.pkl')
 ISO_FILE    = os.path.join(BASE, 'model', 'anomaly_detector_model.pkl')
 OUT_FILE    = os.path.join(BASE, 'model', 'scored_batch.csv')
@@ -49,6 +53,42 @@ WINDOWS     = [5, 10, 20]
 # ─────────────────────────────────────────────────────────────────────────────
 # Data loading / feature engineering (must match train_model.py exactly)
 # ─────────────────────────────────────────────────────────────────────────────
+
+def ensure_dataset(path: str) -> None:
+    """Download the canonical dataset from S3 if it isn't already present.
+
+    Only the shared iot_demo_dataset.json (240 MB, gitignored) is auto-fetched;
+    a missing user-supplied --input is left to fail as a genuine error. Streams
+    to a temp file and renames on success so an interrupted download never
+    leaves a truncated file in place.
+    """
+    if os.path.exists(path):
+        return
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    print(f'{os.path.basename(path)} not found — downloading from S3 ...')
+    print(f'  {DATA_URL}')
+    t0 = time.time()
+    tmp = path + '.part'
+    try:
+        def _progress(blocks, block_size, total):
+            done = blocks * block_size
+            if total > 0:
+                pct = min(100, done * 100 // total)
+                print(f'\r  {done >> 20:,} / {total >> 20:,} MiB  ({pct}%)',
+                      end='', flush=True)
+            else:
+                print(f'\r  {done >> 20:,} MiB', end='', flush=True)
+
+        urllib.request.urlretrieve(DATA_URL, tmp, reporthook=_progress)
+        print()
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+    print(f'  downloaded in {time.time() - t0:.1f}s')
+
 
 def flatten_records(records: list) -> pd.DataFrame:
     """Normalise raw dataset records into the flat columns the feature code
@@ -153,7 +193,9 @@ def main(input_file: str, device_filter, n_rows: int):
     print(f'  Anomaly detector: {iso_p["model_name"]}')
     print(f'  Fault horizon:    {clf_p["horizon"]} readings')
 
-    # Load batch
+    # Load batch — auto-download the canonical dataset if it's the default input
+    if os.path.abspath(input_file) == os.path.abspath(DATA_FILE):
+        ensure_dataset(input_file)
     print(f'\nLoading data from {os.path.basename(input_file)} ...')
     records = []
     with open(input_file, encoding='utf-8') as f:

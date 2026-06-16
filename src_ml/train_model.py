@@ -28,6 +28,7 @@ import json
 import os
 import pickle
 import time
+import urllib.request
 import warnings
 
 import numpy as np
@@ -43,6 +44,8 @@ warnings.filterwarnings('ignore')
 # -- Config --------------------------------------------------------------------
 BASE       = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE  = os.path.join(BASE, '..', 'data', 'iot_demo_dataset.json')
+DATA_URL   = ('https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com'
+              '/iot_demo_dataset.json')
 MODEL_DIR  = os.path.join(BASE, 'model')
 os.makedirs(MODEL_DIR, exist_ok=True)
 
@@ -92,7 +95,43 @@ def flatten_records(records: list) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def ensure_dataset(path: str) -> None:
+    """Download the dataset from S3 if it isn't already present locally.
+
+    The 240 MB iot_demo_dataset.json is gitignored, so it's auto-fetched on
+    first use. Streams to a temp file and renames on success so an interrupted
+    download never leaves a truncated file in place.
+    """
+    if os.path.exists(path):
+        return
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    print(f'{os.path.basename(path)} not found — downloading from S3 ...')
+    print(f'  {DATA_URL}')
+    t0 = time.time()
+    tmp = path + '.part'
+    try:
+        def _progress(blocks, block_size, total):
+            done = blocks * block_size
+            if total > 0:
+                pct = min(100, done * 100 // total)
+                print(f'\r  {done >> 20:,} / {total >> 20:,} MiB  ({pct}%)',
+                      end='', flush=True)
+            else:
+                print(f'\r  {done >> 20:,} MiB', end='', flush=True)
+
+        urllib.request.urlretrieve(DATA_URL, tmp, reporthook=_progress)
+        print()
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+    print(f'  downloaded in {time.time() - t0:.1f}s')
+
+
 def load_data(path: str) -> pd.DataFrame:
+    ensure_dataset(path)
     print(f'Loading {os.path.basename(path)} ...')
     t0 = time.time()
 

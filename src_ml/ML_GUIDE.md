@@ -41,9 +41,11 @@ pip install -r requirements.txt
 
 ### Dataset
 
-The training script reads directly from the shared `../data/iot_demo_dataset.json` —
-the same dataset the COPY FROM and Telegraf demos use. It is gitignored and
-auto-downloaded from S3 on first use. Confirm it exists before running:
+Both `train_model.py` and `predict.py` read directly from the shared
+`../data/iot_demo_dataset.json` — the same dataset the COPY FROM and Telegraf
+demos use. It is gitignored and auto-downloaded from S3 on first use by
+whichever script runs first (`predict.py` only auto-downloads when scoring the
+default dataset, not a custom `--input` file):
 
 ```
 ../data/
