@@ -70,14 +70,33 @@ def make_engine(url: str):
     return create_engine(resolved, echo=False)
 
 
+def _connection_error(engine, exc):
+    """Turn a noisy SQLAlchemy/crate stack trace into a one-line SystemExit."""
+    host = engine.url.render_as_string(hide_password=True)
+    detail = str(exc)
+    if '401' in detail or 'Unauthorized' in detail:
+        msg = (f'CrateDB rejected the credentials at {host} (401 Unauthorized).\n'
+               f'Set them before running, e.g.:\n'
+               f'    export CRATE_USER=<user> CRATE_PASSWORD=<password>')
+        if engine.url.username is None:
+            msg += '\n(CRATE_USER is not set, so no credentials were sent.)'
+        return SystemExit(msg)
+    return SystemExit(f'Could not query CrateDB at {host}: {detail}')
+
+
 def _read_frame(engine, sql: str, params=None):
     """Run a query and return a DataFrame with `timestamp` coerced to datetime
     and rows ordered by (device_id, timestamp) — matching what the file-based
-    loaders hand to the feature code."""
+    loaders hand to the feature code. Connection/auth failures become a clean
+    SystemExit instead of a noisy stack trace."""
     import pandas as pd
     from sqlalchemy import text
+    from sqlalchemy.exc import SQLAlchemyError
 
-    df = pd.read_sql(text(sql), engine, params=params)
+    try:
+        df = pd.read_sql(text(sql), engine, params=params)
+    except SQLAlchemyError as exc:
+        raise _connection_error(engine, exc) from exc
     if df.empty:
         return df
 
