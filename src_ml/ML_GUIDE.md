@@ -460,7 +460,7 @@ This pattern scales to hundreds of millions of rows because CrateDB distributes 
 
 ### Scenario 3 — Live batch scoring against the current fleet state
 
-This is implemented as `score_fleet_to_crate.py`: it pulls the last 50 readings per device, scores them with both models, collapses to one row per device (the current fleet state), and **always writes the predictions back to CrateDB's `fault_predictions` table**. The input may be CrateDB (default) or a local file (`--input`), but the output always lands in CrateDB:
+This is implemented as `score_fleet_to_crate.py`: it pulls the last 50 readings per device, scores them with both models, collapses to one row per device (the current fleet state), and **always writes the predictions back to CrateDB's `rtia.fault_predictions` table**. The input may be CrateDB (default) or a local file (`--input`), but the output always lands in CrateDB:
 
 ```bash
 export CRATE_USER=... CRATE_PASSWORD=...
@@ -469,7 +469,7 @@ python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --input ../d
 python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --device DEVICE_0042
 ```
 
-It creates `fault_predictions` with the canonical DDL (`CREATE TABLE IF NOT EXISTS`, the same schema `realtime_inference.py` uses) and appends — so the batch job and the live service share one table. The equivalent pipeline written out by hand:
+It creates `rtia.fault_predictions` with the canonical DDL (`CREATE TABLE IF NOT EXISTS`, the same schema `realtime_inference.py` uses) and appends — so the batch job and the live service share one table. The equivalent pipeline written out by hand:
 
 ```python
 import pickle
@@ -514,7 +514,7 @@ df["fault_probability"] = clf["model"].predict_proba(df[clf["features"]].values)
 df["anomaly_score"]     = -iso["model"].score_samples(df[iso["features"]].values)
 
 # Keep the latest scored reading per device, then shape it to match the
-# fault_predictions table that realtime_inference.py creates — same columns,
+# rtia.fault_predictions table that realtime_inference.py creates — same columns,
 # same names — so the batch job and the live service write one schema.
 latest = df.groupby("device_id").last().reset_index()
 latest["scored_at"]         = pd.Timestamp.utcnow()
@@ -532,18 +532,19 @@ cols = ["device_id", "scored_at", "latest_reading_ts", "device_type",
 latest[cols].to_sql(
     "fault_predictions",
     engine,
+    schema="rtia",        # alongside rtia.iot_data
     if_exists="append",   # append into the existing table — never "replace"
     index=False,          # (replace would drop the service's PK'd table)
     method="multi",
 )
 ```
 
-Create `fault_predictions` once with the canonical DDL before the first append —
+Create `rtia.fault_predictions` once with the canonical DDL before the first append —
 either by starting `realtime_inference.py` (it runs `CREATE TABLE IF NOT EXISTS`
 on startup) or by issuing the same statement yourself. Letting pandas auto-create
 it would infer a different, PK-less schema.
 
-Once `fault_predictions` is populated it already carries each device's type, plant, and status (as of scoring time), so the high-risk fleet view is a direct, one-row-per-device query — no join needed:
+Once `rtia.fault_predictions` is populated it already carries each device's type, plant, and status (as of scoring time), so the high-risk fleet view is a direct, one-row-per-device query — no join needed:
 
 ```sql
 SELECT device_id, device_type, plant_id, current_status,
@@ -564,7 +565,7 @@ ORDER BY f.fault_probability DESC
 LIMIT 20;
 ```
 
-Do **not** join `fault_predictions` to the raw `rtia.iot_data` for this: there is one prediction per device but ~1,000 readings per device, so the join fans each prediction out across every reading (500 × 1,000 = 500,000 rows). Query `fault_predictions` directly, or join the 1-row-per-device `rtia.devices`.
+Do **not** join `rtia.fault_predictions` to the raw `rtia.iot_data` for this: there is one prediction per device but ~1,000 readings per device, so the join fans each prediction out across every reading (500 × 1,000 = 500,000 rows). Query `rtia.fault_predictions` directly, or join the 1-row-per-device `rtia.devices`.
 
 This is the full loop: sensor data lives in CrateDB, features are computed there, predictions are scored in Python, and results land back in CrateDB — queryable alongside the fleet's asset data in real time.
 
@@ -598,7 +599,7 @@ This is why CrateDB is required at inference time, not just training time. The f
        +-- score (XGBoost + Isolation Forest)
        |
        v
-  CrateDB  (fault_predictions)  <-- write fault_probability back
+  CrateDB  (rtia.fault_predictions)  <-- write fault_probability back
        |
        v
   Dashboard / alert system  <-- JOIN predictions against live readings
@@ -632,7 +633,7 @@ CRATEDB_URL=crate://admin:<password>@<cluster>.cratedb.net:4200 uvicorn realtime
 | Method | Path | What it does |
 | --- | --- | --- |
 | `GET` | `/health` | Service status, model version, ROC-AUC |
-| `GET` | `/score/{device_id}` | Score one device, write result to `fault_predictions` |
+| `GET` | `/score/{device_id}` | Score one device, write result to `rtia.fault_predictions` |
 | `POST` | `/score/batch` | Score a list of devices in one call |
 | `GET` | `/fleet/high-risk` | Devices with `fault_probability` above a threshold |
 
@@ -678,7 +679,7 @@ The service fetches 50 rows from CrateDB, builds rolling features, and returns a
 
 ### Querying predictions alongside live data
 
-Once `/score` writes to `fault_predictions`, the predictions are queryable from CrateDB like any other table:
+Once `/score` writes to `rtia.fault_predictions`, the predictions are queryable from CrateDB like any other table:
 
 ```sql
 -- Devices in warning/critical at scoring time, with elevated fault probability
@@ -697,7 +698,7 @@ ORDER BY fault_probability DESC
 LIMIT 20;
 ```
 
-`fault_predictions` denormalises `device_type`, `plant_id`, and `current_status` (as of scoring time), so this needs no join. Avoid joining `rtia.iot_data` here — one prediction per device against ~1,000 readings each fans the result out 1,000×; join the 1-row-per-device `rtia.devices` if you need extra asset columns.
+`rtia.fault_predictions` denormalises `device_type`, `plant_id`, and `current_status` (as of scoring time), so this needs no join. Avoid joining `rtia.iot_data` here — one prediction per device against ~1,000 readings each fans the result out 1,000×; join the 1-row-per-device `rtia.devices` if you need extra asset columns.
 
 ```sql
 -- Average fault probability by plant — operational risk overview
@@ -706,7 +707,7 @@ SELECT
     COUNT(DISTINCT f.device_id)          AS devices_scored,
     ROUND(AVG(f.fault_probability), 3)   AS avg_fault_probability,
     COUNT(*) FILTER (WHERE f.fault_risk_label = 'high') AS high_risk_devices
-FROM fault_predictions f
+FROM rtia.fault_predictions f
 GROUP BY f.plant_id
 ORDER BY avg_fault_probability DESC;
 ```

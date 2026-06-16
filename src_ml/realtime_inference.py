@@ -12,7 +12,7 @@ Why CrateDB is required at inference time (not just training):
   a recent-history lookup prunes to the latest partitions and returns in ms.
 
 Architecture:
-  [Sensor] --> CrateDB (rtia.iot_data) --> [this service] --> CrateDB (fault_predictions)
+  [Sensor] --> CrateDB (rtia.iot_data) --> [this service] --> CrateDB (rtia.fault_predictions)
                                             |
                                      trained model
 
@@ -113,7 +113,7 @@ app = FastAPI(
 
 def _ensure_predictions_table():
     ddl = """
-        CREATE TABLE IF NOT EXISTS fault_predictions (
+        CREATE TABLE IF NOT EXISTS rtia.fault_predictions (
             device_id         TEXT,
             scored_at         TIMESTAMP WITH TIME ZONE,
             latest_reading_ts TIMESTAMP WITH TIME ZONE,
@@ -273,7 +273,7 @@ def _score_device(device_id: str) -> dict:
 
 def _write_prediction(result: dict):
     sql = text("""
-        INSERT INTO fault_predictions
+        INSERT INTO rtia.fault_predictions
             (device_id, scored_at, latest_reading_ts, device_type, plant_id,
              current_status, fault_probability, fault_risk_label, anomaly_score)
         VALUES
@@ -323,7 +323,7 @@ def score_device(device_id: str, write: bool = True):
     Fetches the last 50 readings from CrateDB, builds rolling features,
     returns fault_probability and anomaly_score.
 
-    ?write=true (default) also writes the prediction to fault_predictions.
+    ?write=true (default) also writes the prediction to rtia.fault_predictions.
     """
     result = _score_device(device_id)
     if write:
@@ -364,7 +364,7 @@ def fleet_high_risk(threshold: float = 0.6, limit: int = 20):
     """
     Return the most recently scored devices with fault_probability above threshold.
 
-    Reads from fault_predictions — populated by /score or /score/batch calls.
+    Reads from rtia.fault_predictions — populated by /score or /score/batch calls.
     Joining back against rtia.iot_data would return the live sensor context.
     """
     sql = text("""
@@ -377,7 +377,7 @@ def fleet_high_risk(threshold: float = 0.6, limit: int = 20):
             fault_risk_label,
             anomaly_score,
             scored_at
-        FROM fault_predictions
+        FROM rtia.fault_predictions
         WHERE fault_probability >= :threshold
         ORDER BY fault_probability DESC
         LIMIT :lim

@@ -4,7 +4,7 @@ CrateDB Industrial IoT — Scenario 3: live batch scoring against the fleet
 Pull recent readings, score every device with both models, and write one
 prediction row per device back to CrateDB — the current fleet risk snapshot.
 
-  readings (CrateDB *or* a local file)  ->  score  ->  CrateDB fault_predictions
+  readings (CrateDB *or* a local file)  ->  score  ->  CrateDB rtia.fault_predictions
 
 Per the task: the input may be local IoT data (--input) OR CrateDB (default),
 but predictions are **always written to CrateDB**. A --cratedb-url is therefore
@@ -37,7 +37,7 @@ from sqlalchemy import text
 import data_source
 import predict   # reuse flatten_records / build_features / _load_models / paths
 
-# Columns + canonical DDL — identical to realtime_inference.py's fault_predictions.
+# Columns + canonical DDL — identical to realtime_inference.py's rtia.fault_predictions.
 CANON_COLS = ['device_id', 'scored_at', 'latest_reading_ts', 'device_type',
               'plant_id', 'current_status', 'fault_probability',
               'fault_risk_label', 'anomaly_score']
@@ -160,9 +160,9 @@ if __name__ == '__main__':
              'Predictions are still written to CrateDB.')
     parser.add_argument('--device', default=None,
                         help='Score only this device_id')
-    parser.add_argument('--table', default='fault_predictions',
+    parser.add_argument('--table', default='rtia.fault_predictions',
                         help="Destination table (optionally schema-qualified, "
-                             "e.g. rtia.fault_predictions). Default: fault_predictions")
+                             "e.g. rtia.fault_predictions). Default: rtia.fault_predictions")
     args = parser.parse_args()
 
     if not args.cratedb_url:
