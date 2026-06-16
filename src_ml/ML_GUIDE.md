@@ -376,12 +376,12 @@ python train_model.py        # picks up CRATEDB_URL automatically
 
 `--days N` (training) limits the pull to the last *N* days **relative to now**
 (`--days 0` = all history). If you omit `--days`, `train_model.py` uses an
-unusual default: it looks up the oldest reading in the DB and anchors the window
-to *that* date minus 90 days (which spans all available history), logging the
-resolved range at run time. This avoids the trap where a static demo dataset
-with older-than-90-days timestamps makes a `NOW()`-relative window return
-nothing. `predict.py` pulls the last 50 readings per device for rolling context
-— add `--device DEVICE_0001` to score a single device.
+unusual default: the last 90 days relative to the **latest reading in the DB**
+(`MAX("timestamp") - INTERVAL '90' DAY`), not wall-clock now, logged at run
+time. This avoids the trap where a static demo dataset with older-than-90-days
+timestamps makes a `NOW()`-relative window return nothing. `predict.py` pulls
+the last 50 readings per device for rolling context — add `--device
+DEVICE_0001` to score a single device.
 
 ---
 
@@ -401,9 +401,10 @@ SELECT
     fields['quality_score']           AS quality_score,
     tags['metadata_firmware_version'] AS firmware_version
 FROM rtia.iot_data
-WHERE "timestamp" >= NOW() - INTERVAL '90' DAY   -- --days N; an absolute
-                                                 -- cutoff for the default,
-                                                 -- omitted when --days 0
+WHERE "timestamp" >= (SELECT MAX("timestamp")            -- default: last 90 days
+                      FROM rtia.iot_data) - INTERVAL '90' DAY   -- of the newest data
+-- with --days N instead:  WHERE "timestamp" >= NOW() - INTERVAL 'N' DAY
+-- with --days 0:          no WHERE clause (all history)
 ORDER BY tags['device_id'], "timestamp"
 ```
 

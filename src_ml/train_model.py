@@ -456,28 +456,21 @@ def main(cratedb_url=None, days=None, input_file=DATA_FILE):
         import data_source
         engine = data_source.make_engine(cratedb_url)
 
-        since = None
         if days is None:
             # Unusual default: anchor the window to the DATA, not wall-clock
             # NOW(). The demo dataset's timestamps can predate "now", which
-            # makes a NOW()-relative window return nothing. Use the oldest
-            # reading minus a 90-day pad as the cutoff (this spans all available
-            # history) and log it loudly so the behaviour is visible.
-            oldest = data_source.oldest_timestamp(engine)
-            if oldest is None:
-                raise SystemExit('CrateDB returned no rows — rtia.iot_data is empty.')
-            since = oldest - pd.Timedelta(days=90)
-            print(f'  [unusual default] no --days given: anchoring to the oldest '
-                  f'reading ({oldest:%Y-%m-%d}) minus 90 days = {since:%Y-%m-%d}, '
-                  f'which spans all available history.')
-            print(f'  (pass --days N for a NOW()-relative window, or --days 0 for '
-                  f'all history without the lookup.)')
-            window = f'since {since:%Y-%m-%d}'
+            # makes a NOW()-relative window return nothing. The query filters on
+            # the last 90 days relative to the latest reading in the table.
+            print('  [unusual default] no --days given: pulling the last 90 days '
+                  'relative to the LATEST reading in the DB, not wall-clock now '
+                  '(WHERE "timestamp" >= (SELECT MAX("timestamp") ...) - INTERVAL 90 DAY).')
+            print('  (pass --days N for a NOW()-relative window, or --days 0 for all history.)')
+            window = 'latest 90 days'
         else:
             window = f'last {days} days' if days > 0 else 'all history'
 
         print(f'Querying CrateDB at {cratedb_url} ({window}) ...')
-        df = data_source.load_training_frame(engine, days=days, since=since)
+        df = data_source.load_training_frame(engine, days=days)
         if df.empty:
             raise SystemExit('CrateDB returned no rows — check the URL, the '
                              'rtia.iot_data table, and the --days window.')
@@ -560,8 +553,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '--days', type=int, default=None,
         help='With --cratedb-url: pull the last N days, NOW()-relative (0 = all '
-             'history). Default: anchor to the oldest reading in the DB minus 90 '
-             'days (spans all history) — logged at run time.')
+             'history). Default: the last 90 days relative to the latest reading '
+             'in the DB (not wall-clock now) — logged at run time.')
     args = parser.parse_args()
 
     if args.cratedb_url and os.path.abspath(args.input) != os.path.abspath(DATA_FILE):

@@ -115,33 +115,23 @@ def _read_frame(engine, sql: str, params=None):
     return df.sort_values(['device_id', 'timestamp']).reset_index(drop=True)
 
 
-def oldest_timestamp(engine):
-    """Earliest reading timestamp in rtia.iot_data, or None if the table is
-    empty. Used to anchor train_model.py's default window to the data instead
-    of wall-clock NOW()."""
-    import pandas as pd
-    df = _query(engine, 'SELECT MIN("timestamp") AS oldest FROM rtia.iot_data')
-    val = df.iloc[0, 0] if not df.empty else None
-    if val is None or pd.isna(val):
-        return None
-    return _coerce_timestamp(pd.Series([val])).iloc[0]
-
-
-def load_training_frame(engine, days=None, since=None):
+def load_training_frame(engine, days=None):
     """Full per-reading history for training.
 
-    `since` (a datetime) filters to readings at or after an absolute cutoff and
-    takes precedence. Otherwise `days` limits to the last N days relative to
-    NOW(); None / <= 0 pulls everything.
+    `days` limits to the last N days relative to wall-clock NOW(); 0 (or
+    negative) pulls everything. When `days` is None (the default), the window is
+    anchored to the *latest reading in the table* instead — the demo dataset's
+    timestamps can predate "now", which would make a NOW()-relative window
+    return nothing.
     """
-    where = ''
-    params = None
-    if since is not None:
-        import pandas as pd
-        where = 'WHERE "timestamp" >= :since'
-        params = {'since': pd.Timestamp(since).isoformat()}
-    elif days and days > 0:
+    if days is None:
+        # Last 90 days relative to the newest reading, computed in SQL.
+        where = ('WHERE "timestamp" >= '
+                 '(SELECT MAX("timestamp") FROM rtia.iot_data) - INTERVAL \'90\' DAY')
+    elif days > 0:
         where = f'WHERE "timestamp" >= NOW() - INTERVAL \'{int(days)}\' DAY'
+    else:
+        where = ''   # days <= 0 → all history
 
     sql = f"""
     SELECT {SELECT_COLUMNS}
@@ -149,7 +139,7 @@ def load_training_frame(engine, days=None, since=None):
     {where}
     ORDER BY tags['device_id'], "timestamp"
     """
-    return _read_frame(engine, sql, params=params)
+    return _read_frame(engine, sql)
 
 
 def load_scoring_frame(engine, device=None, context_rows=50):
