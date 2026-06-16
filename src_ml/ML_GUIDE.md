@@ -212,7 +212,7 @@ DEVICE_0219  pressure_sensor   PLANT_HAMBURG   2025-10-10 14:00  warning   0.961
 
 Before relying on the model in production, check whether it learned the right things. Two outputs are worth examining: the feature importances (did the model find the signals you expected?) and the test predictions (where does it fail, and on which device types?).
 
-### Feature importances
+### Feature importance's
 
 `model/feature_importance.csv` shows which signals the model found most predictive. Typical ranking for this dataset:
 
@@ -287,8 +287,11 @@ row = {
 }
 X = pd.DataFrame([row])
 
-prob    = clf['model'].predict_proba(X[clf['features']])[0, 1]
-anomaly = -iso['model'].score_samples(X[iso['features']])[0]
+# Select by name, then pass a plain NumPy array (.to_numpy()): the anomaly
+# detector was fitted on a nameless array, so a named DataFrame would trigger a
+# sklearn feature-name warning.
+prob    = clf['model'].predict_proba(X[clf['features']].to_numpy())[0, 1]
+anomaly = -iso['model'].score_samples(X[iso['features']].to_numpy())[0]
 print(f'Fault probability: {prob:.1%}   Anomaly score: {anomaly:.4f}')
 ```
 
