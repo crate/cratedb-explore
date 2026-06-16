@@ -283,7 +283,12 @@ row = {
     'metric_value': 85.0, 'quality_score': 91.0, 'hour': 14, 'day_of_week': 2,
     'device_type_enc': device_type_enc, 'metric_delta': 1.2, 'quality_delta': -0.5,
     'fw_major': 2,
-    # ... metric_mean_5/10/20, metric_std_5/10/20, quality_mean_5/10/20, fault_rate_5/10/20
+    # Rolling-window features — in real use these come from engineer_features();
+    # here they're filled with plausible values so the example runs standalone.
+    'metric_mean_5': 84.0, 'metric_mean_10': 83.5, 'metric_mean_20': 83.0,
+    'metric_std_5': 1.5, 'metric_std_10': 1.8, 'metric_std_20': 2.1,
+    'quality_mean_5': 91.5, 'quality_mean_10': 92.0, 'quality_mean_20': 92.5,
+    'fault_rate_5': 0.0, 'fault_rate_10': 0.0, 'fault_rate_20': 0.0,
 }
 X = pd.DataFrame([row])
 
