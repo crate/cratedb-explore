@@ -426,11 +426,12 @@ This is implemented as a standalone script, `train_aggregated.py` (it changes th
 
 ```bash
 export CRATE_USER=... CRATE_PASSWORD=...
-python train_aggregated.py --cratedb-url crate://localhost:4200            # 1-day windows
-python train_aggregated.py --cratedb-url crate://localhost:4200 --window '6 hours'
+python train_aggregated.py   --cratedb-url crate://localhost:4200          # 1-day windows
+python train_aggregated.py   --cratedb-url crate://localhost:4200 --window '6 hours'
+python predict_aggregated.py --cratedb-url crate://localhost:4200 --latest # score each device's next window
 ```
 
-The query it runs (in `data_source.load_aggregated_frame`):
+`predict_aggregated.py` reuses the same DB-side aggregation, scores each window with the saved model (defaulting to the window the model was trained on), and writes `model/aggregated_scored.csv`; `--latest` keeps only the most recent window per device. The query both scripts run (in `data_source.load_aggregated_frame`):
 
 ```sql
 SELECT
@@ -714,6 +715,7 @@ src_ml/
 ├── requirements.txt        ← Python dependencies
 ├── train_model.py          ← training pipeline (run once)
 ├── train_aggregated.py     ← Scenario 2: train on CrateDB-side aggregates
+├── predict_aggregated.py   ← Scenario 2: score with the aggregated model
 ├── predict.py              ← batch scoring (run on new data)
 ├── data_source.py          ← optional CrateDB loader (--cratedb-url)
 ├── use_models_example.py   ← minimal "use the models" example

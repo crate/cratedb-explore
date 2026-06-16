@@ -59,7 +59,7 @@ FEATURES = NUMERIC_FEATURES + ['device_type_enc', 'window_dow', 'window_hour']
 
 def build_features(df: pd.DataFrame):
     """Add the encoded/time features and the next-window target. Returns
-    (X, y, feature_list, label_encoder)."""
+    (X, y, full_frame, label_encoder)."""
     df = df.copy()
 
     # STDDEV is NULL for single-reading windows; treat "no variation" as 0.
@@ -79,7 +79,7 @@ def build_features(df: pd.DataFrame):
     df = df.dropna(subset=['target'])
     df['target'] = df['target'].astype(int)
 
-    return df[FEATURES], df['target'], df
+    return df[FEATURES], df['target'], df, le
 
 
 def train(X_train, y_train):
@@ -128,7 +128,7 @@ def main(cratedb_url, window, days):
     print(f'  {len(df):,} windows  |  {df["device_id"].nunique()} devices  '
           f'|  avg {df["n_readings"].mean():.1f} readings/window')
 
-    X, y, full = build_features(df)
+    X, y, full, label_encoder = build_features(df)
     print(f'  {len(X):,} training rows after next-window target shift  |  '
           f'fault_incoming: {int(y.sum()):,} ({y.mean():.1%})')
 
@@ -161,13 +161,14 @@ def main(cratedb_url, window, days):
             print(f'  {feat:<16} {imp:.4f}')
 
     payload = {
-        'model':        clf,
-        'model_name':   model_name,
-        'features':     FEATURES,
-        'window':       window,
-        'target':       'had_fault in the next window',
-        'roc_auc':      round(float(roc), 4) if roc == roc else None,
-        'trained_at':   pd.Timestamp.now().isoformat(),
+        'model':         clf,
+        'model_name':    model_name,
+        'features':      FEATURES,
+        'label_encoder': label_encoder,   # encodes device_type at predict time
+        'window':        window,
+        'target':        'had_fault in the next window',
+        'roc_auc':       round(float(roc), 4) if roc == roc else None,
+        'trained_at':    pd.Timestamp.now().isoformat(),
     }
     with open(OUT_FILE, 'wb') as f:
         pickle.dump(payload, f)
