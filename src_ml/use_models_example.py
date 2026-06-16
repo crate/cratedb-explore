@@ -37,6 +37,10 @@ row = {
 }
 X = pd.DataFrame([row])
 
-prob    = clf['model'].predict_proba(X[clf['features']])[0, 1]
-anomaly = -iso['model'].score_samples(X[iso['features']])[0]
+# Select each model's features BY NAME, then hand the model a plain NumPy array
+# (.to_numpy()). The anomaly detector was fitted on a nameless array in
+# train_model.py, so passing a named DataFrame triggers a sklearn feature-name
+# warning; converting here keeps the correct column order and silences it.
+prob    = clf['model'].predict_proba(X[clf['features']].to_numpy())[0, 1]
+anomaly = -iso['model'].score_samples(X[iso['features']].to_numpy())[0]
 print(f'Fault probability: {prob:.1%}   Anomaly score: {anomaly:.4f}')
