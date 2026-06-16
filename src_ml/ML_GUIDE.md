@@ -258,6 +258,8 @@ A reading can be high-anomaly but low-fault-probability (unusual sensor reading 
 
 ## Using the models in your own code
 
+The snippet below is also available as a runnable script: [`use_models_example.py`](use_models_example.py).
+
 ```python
 import pickle
 import pandas as pd
