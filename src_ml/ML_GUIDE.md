@@ -543,22 +543,30 @@ either by starting `realtime_inference.py` (it runs `CREATE TABLE IF NOT EXISTS`
 on startup) or by issuing the same statement yourself. Letting pandas auto-create
 it would infer a different, PK-less schema.
 
-Once `fault_predictions` exists in CrateDB, you can JOIN it against live sensor data in a single query:
+Once `fault_predictions` is populated it already carries each device's type, plant, and status (as of scoring time), so the high-risk fleet view is a direct, one-row-per-device query — no join needed:
 
 ```sql
-SELECT i.tags['device_id']      AS device_id,
-       i.tags['device_type']    AS device_type,
-       i.tags['plant_id']       AS plant_id,
-       i.tags['status']         AS status,
-       i.fields['metric_value'] AS metric_value,
-       f.fault_probability
-FROM rtia.iot_data i
-JOIN fault_predictions f ON i.tags['device_id'] = f.device_id
-WHERE f.fault_probability > 0.60
-ORDER BY f.fault_probability DESC;
+SELECT device_id, device_type, plant_id, current_status,
+       fault_probability, anomaly_score, scored_at
+FROM rtia.fault_predictions
+ORDER BY fault_probability DESC      -- add WHERE fault_probability > 0.60 to alert
+LIMIT 20;
 ```
 
-This is the full loop: sensor data lives in CrateDB, features are computed there, predictions are scored in Python, and results land back in CrateDB — queryable alongside the raw readings in real time.
+To enrich with static asset attributes (manufacturer, model, responsible technician), join `rtia.devices`, which has **one row per device** so the cardinality stays 1:1:
+
+```sql
+SELECT f.device_id, d.manufacturer, d.model, d.responsible_technician,
+       f.fault_probability, f.anomaly_score
+FROM rtia.fault_predictions f
+JOIN rtia.devices d ON f.device_id = d.device_id
+ORDER BY f.fault_probability DESC
+LIMIT 20;
+```
+
+Do **not** join `fault_predictions` to the raw `rtia.iot_data` for this: there is one prediction per device but ~1,000 readings per device, so the join fans each prediction out across every reading (500 × 1,000 = 500,000 rows). Query `fault_predictions` directly, or join the 1-row-per-device `rtia.devices`.
+
+This is the full loop: sensor data lives in CrateDB, features are computed there, predictions are scored in Python, and results land back in CrateDB — queryable alongside the fleet's asset data in real time.
 
 ---
 
@@ -673,23 +681,23 @@ The service fetches 50 rows from CrateDB, builds rolling features, and returns a
 Once `/score` writes to `fault_predictions`, the predictions are queryable from CrateDB like any other table:
 
 ```sql
--- Devices currently in warning or critical with high fault probability
+-- Devices in warning/critical at scoring time, with elevated fault probability
 SELECT
-    i.tags['device_id']      AS device_id,
-    i.tags['device_type']    AS device_type,
-    i.tags['plant_id']       AS plant_id,
-    i.tags['status']         AS status,
-    i.fields['metric_value'] AS metric_value,
-    f.fault_probability,
-    f.fault_risk_label,
-    f.scored_at
-FROM rtia.iot_data i
-JOIN fault_predictions f ON i.tags['device_id'] = f.device_id
-WHERE i.tags['status'] IN ('warning', 'critical')
-  AND f.fault_probability > 0.60
-ORDER BY f.fault_probability DESC
+    device_id,
+    device_type,
+    plant_id,
+    current_status,
+    fault_probability,
+    fault_risk_label,
+    scored_at
+FROM rtia.fault_predictions
+WHERE current_status IN ('warning', 'critical')
+  AND fault_probability > 0.60
+ORDER BY fault_probability DESC
 LIMIT 20;
 ```
+
+`fault_predictions` denormalises `device_type`, `plant_id`, and `current_status` (as of scoring time), so this needs no join. Avoid joining `rtia.iot_data` here — one prediction per device against ~1,000 readings each fans the result out 1,000×; join the 1-row-per-device `rtia.devices` if you need extra asset columns.
 
 ```sql
 -- Average fault probability by plant — operational risk overview
