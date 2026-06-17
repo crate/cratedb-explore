@@ -341,8 +341,8 @@ if __name__ == '__main__':
                         help='Max rows to score (default: 2000)')
     parser.add_argument('--cratedb-url', default=os.getenv('CRATEDB_URL'),
                         help='Score from CrateDB instead of the file, e.g. '
-                             'crate://localhost:4200 (credentials via CRATE_USER / '
-                             'CRATE_PASSWORD env). Env: CRATEDB_URL')
+                             'crate://localhost:4200 (credentials via CRATEDB_USER / '
+                             'CRATEDB_PASSWORD env). Env: CRATEDB_URL')
     args = parser.parse_args()
 
     if args.cratedb_url and os.path.abspath(args.input) != os.path.abspath(DATA_FILE):

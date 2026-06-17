@@ -18,12 +18,12 @@ aggregates. This mirrors train_model.py's "fault within the next N readings".
 
 Connection (same convention as train_model.py / predict.py)
 -----------------------------------------------------------
-  CRATE_USER / CRATE_PASSWORD   credentials (kept out of argv)
+  CRATEDB_USER / CRATEDB_PASSWORD   credentials (kept out of argv)
   --cratedb-url / CRATEDB_URL   host, e.g. crate://localhost:4200
 
 Usage
 -----
-  export CRATE_USER=... CRATE_PASSWORD=...
+  export CRATEDB_USER=... CRATEDB_PASSWORD=...
   python train_aggregated.py --cratedb-url crate://localhost:4200
   python train_aggregated.py --cratedb-url crate://localhost:4200 --window '6 hours'
 
@@ -183,7 +183,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--cratedb-url', default=os.getenv('CRATEDB_URL'), required=False,
         help='CrateDB host, e.g. crate://localhost:4200 (credentials via '
-             'CRATE_USER / CRATE_PASSWORD env). Env: CRATEDB_URL')
+             'CRATEDB_USER / CRATEDB_PASSWORD env). Env: CRATEDB_URL')
     parser.add_argument(
         '--window', default='1 day',
         help="Aggregation window as a CrateDB INTERVAL, e.g. '1 day', '6 hours'. "

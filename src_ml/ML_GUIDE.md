@@ -355,7 +355,7 @@ the official `crate` client); `sqlalchemy` itself backs `pandas.read_sql()`.
 
 Both `train_model.py` and `predict.py` build the engine for you: pass the host
 with `--cratedb-url` (or the `CRATEDB_URL` env var) and supply credentials via
-the `CRATE_USER` / `CRATE_PASSWORD` environment variables, so passwords never
+the `CRATEDB_USER` / `CRATEDB_PASSWORD` environment variables, so passwords never
 land in your shell history or `ps` output. The local JSON file stays the default
 — the CrateDB URL is purely additive.
 
@@ -369,7 +369,7 @@ python predict.py     --cratedb-url crate://localhost:4200
 **CrateDB Cloud:**
 
 ```bash
-export CRATE_USER=admin CRATE_PASSWORD='<password>'
+export CRATEDB_USER=admin CRATEDB_PASSWORD='<password>'
 export CRATEDB_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
 python train_model.py        # picks up CRATEDB_URL automatically
 ```
@@ -425,7 +425,7 @@ Rolling statistics over 500,000 rows in pandas requires loading every raw readin
 This is implemented as a standalone script, `train_aggregated.py` (it changes the feature schema, so it's separate from `train_model.py`'s `--cratedb-url` path rather than folded into it):
 
 ```bash
-export CRATE_USER=... CRATE_PASSWORD=...
+export CRATEDB_USER=... CRATEDB_PASSWORD=...
 python train_aggregated.py   --cratedb-url crate://localhost:4200          # 1-day windows
 python train_aggregated.py   --cratedb-url crate://localhost:4200 --window '6 hours'
 python predict_aggregated.py --cratedb-url crate://localhost:4200 --latest # score each device's next window
@@ -463,7 +463,7 @@ This pattern scales to hundreds of millions of rows because CrateDB distributes 
 This is implemented as `score_fleet_to_crate.py`: it pulls the last 50 readings per device, scores them with both models, collapses to one row per device (the current fleet state), and **always writes the predictions back to CrateDB's `rtia.fault_predictions` table**. The input may be CrateDB (default) or a local file (`--input`), but the output always lands in CrateDB:
 
 ```bash
-export CRATE_USER=... CRATE_PASSWORD=...
+export CRATEDB_USER=... CRATEDB_PASSWORD=...
 python score_fleet_to_crate.py --cratedb-url crate://localhost:4200                  # read CrateDB
 python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --input ../data/iot_demo_dataset.json
 python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --device DEVICE_0042
@@ -609,26 +609,38 @@ This is why CrateDB is required at inference time, not just training time. The f
 
 **File:** `realtime_inference.py` (in `src_ml/`)
 
-Install the dependencies (`requirements.txt` already includes FastAPI/uvicorn and
+Open a new window or session.
+
+Point `CRATEDB_URL` at your cluster (host only) and supply credentials via the
+`CRATEDB_USER` / `CRATEDB_PASSWORD` environment variables — the service injects them
+into the connection, so passwords never appear in the URL or process list:
+
+```bash
+# Local / Docker (no auth)
+export CRATEDB_URL='crate://localhost:4200'
+
+# CrateDB Cloud
+export CRATEDB_USER=admin CRATEDB_PASSWORD='<password>'
+export CRATEDB_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
+```
+
+Make sure you have installed the dependencies (`requirements.txt` already 
+includes FastAPI/uvicorn and
 the CrateDB tier — `sqlalchemy-cratedb` registers the `crate://` dialect the
 service connects through), then:
 
 ```bash
-pip install -r requirements.txt
+source .venv/bin/activate
 uvicorn realtime_inference:app --reload --port 8000
 ```
 
-Point `CRATEDB_URL` at your cluster:
 
-```bash
-# Local / Docker
-CRATEDB_URL=crate://localhost:4200 uvicorn realtime_inference:app --port 8000
-
-# CrateDB Cloud
-CRATEDB_URL=crate://admin:<password>@<cluster>.cratedb.net:4200 uvicorn realtime_inference:app --port 8000
-```
 
 ### Endpoints
+
+Return to your original window/session.
+
+We now have a series of endpoints we can use for real time inference:
 
 | Method | Path | What it does |
 | --- | --- | --- |

@@ -12,11 +12,11 @@ pickle) so features line up; --window overrides it. --latest keeps only the most
 recent window per device — the actionable "what happens next" row.
 
 Connection (same convention as the other scripts)
-  CRATE_USER / CRATE_PASSWORD   credentials (kept out of argv)
+  CRATEDB_USER / CRATEDB_PASSWORD   credentials (kept out of argv)
   --cratedb-url / CRATEDB_URL   host, e.g. crate://localhost:4200
 
 Usage
-  export CRATE_USER=... CRATE_PASSWORD=...
+  export CRATEDB_USER=... CRATEDB_PASSWORD=...
   python predict_aggregated.py --cratedb-url crate://localhost:4200
   python predict_aggregated.py --cratedb-url crate://localhost:4200 --latest
   python predict_aggregated.py --cratedb-url crate://localhost:4200 --device DEVICE_0042
@@ -122,7 +122,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--cratedb-url', default=os.getenv('CRATEDB_URL'),
         help='CrateDB host, e.g. crate://localhost:4200 (credentials via '
-             'CRATE_USER / CRATE_PASSWORD env). Env: CRATEDB_URL')
+             'CRATEDB_USER / CRATEDB_PASSWORD env). Env: CRATEDB_URL')
     parser.add_argument(
         '--window', default=None,
         help="Aggregation window as a CrateDB INTERVAL. Default: the window the "

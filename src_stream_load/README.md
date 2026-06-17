@@ -178,7 +178,7 @@ Behaviour worth knowing:
   rejects duplicates per-row (reported as *skipped*, not *inserted*), so
   re-reading a topic never doubles the data. Offsets are committed after each
   batch, so the consumer also resumes from where it left off.
-- **Credentials come from the environment.** Set `CRATE_USER` / `CRATE_PASSWORD`
+- **Credentials come from the environment.** Set `CRATEDB_USER` / `CRATEDB_PASSWORD`
   (HTTP basic auth); the endpoint itself is `--cratedb-url` (env `CRATEDB_URL`,
   default `http://localhost:4200`). Exit codes: `0` success · `1` bad argument ·
   `2` CrateDB unreachable or rejected a statement.

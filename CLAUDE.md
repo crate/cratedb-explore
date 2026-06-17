@@ -37,7 +37,7 @@ cd src_weather/main/dotnet
 dotnet run -- <duration-s> <host> <rps> <sslmode> [TYPE:COUNT ...]
 ```
 
-Load generators read credentials from `CRATE_USER` / `CRATE_PASSWORD` env vars (never CLI args). The MCP server reads its CrateDB connection from `--cratedb-*` flags or `CRATEDB_*` env vars and defaults to `crate@localhost:4200`; it is launched by an MCP client (`pip install -r src_mcp_search/requirements.txt`; `claude mcp add german-weather -- python src_mcp_search/german_weather_mcp.py`).
+Load generators read credentials from `CRATEDB_USER` / `CRATEDB_PASSWORD` env vars (never CLI args). The MCP server reads its CrateDB connection from `--cratedb-*` flags or `CRATEDB_*` env vars and defaults to `crate@localhost:4200`; it is launched by an MCP client (`pip install -r src_mcp_search/requirements.txt`; `claude mcp add german-weather -- python src_mcp_search/german_weather_mcp.py`).
 
 ## CrateDB connection conventions
 

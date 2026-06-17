@@ -43,7 +43,7 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <h2>Usage</h2>
  * <pre>
- *   CRATE_USER=&lt;user&gt; CRATE_PASSWORD=&lt;password&gt; \
+ *   CRATEDB_USER=&lt;user&gt; CRATEDB_PASSWORD=&lt;password&gt; \
  *   java QueryCrate \
  *       &lt;duration-seconds&gt; &lt;host&gt; &lt;requests-per-second&gt; &lt;sslmode&gt; \
  *       [TYPE:COUNT ...]
@@ -62,8 +62,8 @@ import java.util.concurrent.ThreadLocalRandom;
  *   1 — too few command-line arguments (usage error)
  *   2 — duration-seconds is not a valid integer
  *   3 — requests-per-second is not a valid positive integer
- *   4 — CRATE_USER environment variable is missing
- *   5 — CRATE_PASSWORD environment variable is missing
+ *   4 — CRATEDB_USER environment variable is missing
+ *   5 — CRATEDB_PASSWORD environment variable is missing
  *   6 — TYPE:COUNT argument has bad format
  *   7 — unknown query type
  *   8 — query count is not a valid positive integer
@@ -183,15 +183,15 @@ public class QueryCrate {
 
         // Credentials come from environment variables rather than CLI args so they don't
         // appear in shell history or process listings (ps aux), which is a basic security practice.
-        String user = System.getenv("CRATE_USER");
+        String user = System.getenv("CRATEDB_USER");
         if (user == null || user.isEmpty()) {
-            System.err.println("CRATE_USER environment variable is not set.");
+            System.err.println("CRATEDB_USER environment variable is not set.");
             System.exit(EXIT_NO_USER);
         }
 
-        String password = System.getenv("CRATE_PASSWORD");
+        String password = System.getenv("CRATEDB_PASSWORD");
         if (password == null || password.isEmpty()) {
-            System.err.println("CRATE_PASSWORD environment variable is not set.");
+            System.err.println("CRATEDB_PASSWORD environment variable is not set.");
             System.exit(EXIT_NO_PASSWORD);
         }
 

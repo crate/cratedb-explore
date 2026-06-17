@@ -114,11 +114,11 @@ By default the output connects to `postgres://crate@localhost:5432/crate` (local
 
 ```toml
 [[outputs.cratedb]]
-  url   = "postgres://${CRATE_USER}:${CRATE_PASSWORD}@<your-cluster>.cratedb.net:5432/crate?sslmode=require"
+  url   = "postgres://${CRATEDB_USER}:${CRATEDB_PASSWORD}@<your-cluster>.cratedb.net:5432/crate?sslmode=require"
   table = "rtia.iot_data"
 ```
 
-`CRATE_USER` / `CRATE_PASSWORD` are read from the environment (Telegraf substitutes `${VAR}` at load time), so no secret is written into the config file.
+`CRATEDB_USER` / `CRATEDB_PASSWORD` are read from the environment (Telegraf substitutes `${VAR}` at load time), so no secret is written into the config file.
 
 ---
 

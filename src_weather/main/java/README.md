@@ -67,11 +67,11 @@ mvn clean package
 
 ## Run
 
-The application takes four mandatory positional arguments and optional `TYPE:COUNT` pairs to define the query mix. Database credentials are read from the `CRATE_USER` and `CRATE_PASSWORD` environment variables so they never land in shell history or process listings.
+The application takes four mandatory positional arguments and optional `TYPE:COUNT` pairs to define the query mix. Database credentials are read from the `CRATEDB_USER` and `CRATEDB_PASSWORD` environment variables so they never land in shell history or process listings.
 
 ```bash
-export CRATE_USER='admin'
-export CRATE_PASSWORD='your-password'
+export CRATEDB_USER='admin'
+export CRATEDB_PASSWORD='your-password'
 mvn compile exec:java -Dexec.args="<duration-seconds> <host> <requests-per-second> <sslmode> [TYPE:COUNT ...]"
 ```
 
@@ -118,16 +118,16 @@ Behavioural detail behind the three TYPE codes — what each call samples, which
 Run WKT queries continuously for 120 seconds against CrateDB Cloud at ~50 req/sec:
 
 ```bash
-export CRATE_USER='admin'
-export CRATE_PASSWORD='your-password'
+export CRATEDB_USER='admin'
+export CRATEDB_PASSWORD='your-password'
 mvn compile exec:java -Dexec.args="120 my-cluster.eks1.eu-west-1.aws.cratedb.net 50 require"
 ```
 
 Run a mixed workload (100 WKT + 50 REGION + 30 FTS queries) against a local cluster:
 
 ```bash
-export CRATE_USER='admin'
-export CRATE_PASSWORD='your-password'
+export CRATEDB_USER='admin'
+export CRATEDB_PASSWORD='your-password'
 mvn compile exec:java -Dexec.args="120 localhost 50 disable WKT:100 REGION:50 FTS:30"
 ```
 

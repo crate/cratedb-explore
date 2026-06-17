@@ -15,11 +15,11 @@ same names) so the batch job and the live service write one shared schema. It is
 created with CREATE TABLE IF NOT EXISTS, then appended to — never replaced.
 
 Connection (same convention as the other scripts)
-  CRATE_USER / CRATE_PASSWORD   credentials (kept out of argv)
+  CRATEDB_USER / CRATEDB_PASSWORD   credentials (kept out of argv)
   --cratedb-url / CRATEDB_URL   host, e.g. crate://localhost:4200
 
 Usage
-  export CRATE_USER=... CRATE_PASSWORD=...
+  export CRATEDB_USER=... CRATEDB_PASSWORD=...
   python score_fleet_to_crate.py --cratedb-url crate://localhost:4200            # read CrateDB
   python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --input ../data/iot_demo_dataset.json
   python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --device DEVICE_0042
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--cratedb-url', default=os.getenv('CRATEDB_URL'),
         help='CrateDB host, e.g. crate://localhost:4200 (credentials via '
-             'CRATE_USER / CRATE_PASSWORD env). Required — predictions are '
+             'CRATEDB_USER / CRATEDB_PASSWORD env). Required — predictions are '
              'always written here. Env: CRATEDB_URL')
     parser.add_argument(
         '--input', default=None,

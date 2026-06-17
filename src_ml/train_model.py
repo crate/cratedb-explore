@@ -549,7 +549,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--cratedb-url', default=os.getenv('CRATEDB_URL'),
         help='Train from CrateDB instead of the file, e.g. crate://localhost:4200 '
-             '(credentials via CRATE_USER / CRATE_PASSWORD env). Env: CRATEDB_URL')
+             '(credentials via CRATEDB_USER / CRATEDB_PASSWORD env). Env: CRATEDB_URL')
     parser.add_argument(
         '--days', type=int, default=None,
         help='With --cratedb-url: pull the last N days, NOW()-relative (0 = all '

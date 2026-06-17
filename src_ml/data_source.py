@@ -36,7 +36,7 @@ def make_engine(url: str):
     """Build a SQLAlchemy engine for CrateDB from a host URL.
 
     `url` carries host/port only (e.g. 'crate://localhost:4200' or just
-    'localhost:4200'); credentials come from the CRATE_USER / CRATE_PASSWORD
+    'localhost:4200'); credentials come from the CRATEDB_USER / CRATEDB_PASSWORD
     environment variables and are injected here, so secrets never appear in
     argv. A scheme is added if missing, and an http(s):// scheme is rewritten to
     the crate:// dialect sqlalchemy-cratedb registers.
@@ -59,8 +59,8 @@ def make_engine(url: str):
     # Inject env credentials only when the URL doesn't already carry userinfo.
     netloc = parts.netloc
     if '@' not in netloc:
-        user = os.getenv('CRATE_USER')
-        password = os.getenv('CRATE_PASSWORD')
+        user = os.getenv('CRATEDB_USER')
+        password = os.getenv('CRATEDB_PASSWORD')
         if user:
             cred = quote(user, safe='')
             if password:
@@ -78,9 +78,9 @@ def connection_error(engine, exc):
     if '401' in detail or 'Unauthorized' in detail:
         msg = (f'CrateDB rejected the credentials at {host} (401 Unauthorized).\n'
                f'Set them before running, e.g.:\n'
-               f'    export CRATE_USER=<user> CRATE_PASSWORD=<password>')
+               f'    export CRATEDB_USER=<user> CRATEDB_PASSWORD=<password>')
         if engine.url.username is None:
-            msg += '\n(CRATE_USER is not set, so no credentials were sent.)'
+            msg += '\n(CRATEDB_USER is not set, so no credentials were sent.)'
         return SystemExit(msg)
     return SystemExit(f'Could not query CrateDB at {host}: {detail}')
 

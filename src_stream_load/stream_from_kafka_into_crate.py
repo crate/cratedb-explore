@@ -33,7 +33,7 @@ The consumer drains whatever is currently in the band topics and stops. With
 stop). If ``demo.climate_data`` is missing it is created first from
 ``sql/german_weather_data_ddl.sql``, and the DDL is printed as it runs.
 
-CrateDB credentials are read from the CRATE_USER / CRATE_PASSWORD environment
+CrateDB credentials are read from the CRATEDB_USER / CRATEDB_PASSWORD environment
 variables (never the command line), matching the other tools in this repo.
 
 Usage:
@@ -352,9 +352,9 @@ def main(argv=None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
 
     auth = None
-    user = os.environ.get("CRATE_USER")
+    user = os.environ.get("CRATEDB_USER")
     if user:
-        auth = (user, os.environ.get("CRATE_PASSWORD", ""))
+        auth = (user, os.environ.get("CRATEDB_PASSWORD", ""))
 
     crate = CrateClient(args.cratedb_url, auth)
     try:

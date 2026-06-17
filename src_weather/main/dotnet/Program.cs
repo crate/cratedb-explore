@@ -21,7 +21,7 @@ using Npgsql;
 /// wire protocol and runs a configurable mix of queries against climate data.
 ///
 /// Usage:
-///   CRATE_USER=user CRATE_PASSWORD=password \
+///   CRATEDB_USER=user CRATEDB_PASSWORD=password \
 ///   dotnet run -- duration-seconds host requests-per-second sslmode [TYPE:COUNT ...]
 ///
 ///   Supported query types: WKT, REGION, FTS
@@ -32,8 +32,8 @@ using Npgsql;
 ///   1 — too few command-line arguments (usage error)
 ///   2 — duration-seconds is not a valid integer
 ///   3 — requests-per-second is not a valid positive integer
-///   4 — CRATE_USER environment variable is missing
-///   5 — CRATE_PASSWORD environment variable is missing
+///   4 — CRATEDB_USER environment variable is missing
+///   5 — CRATEDB_PASSWORD environment variable is missing
 ///   6 — TYPE:COUNT argument has bad format
 ///   7 — unknown query type
 ///   8 — query count is not a valid positive integer
@@ -137,18 +137,18 @@ if (requestsPerSecond <= 0)
 var sslMode = args[3];
 
 // Credentials from environment variables so they don't appear in shell history.
-var user = Environment.GetEnvironmentVariable("CRATE_USER") ?? "";
+var user = Environment.GetEnvironmentVariable("CRATEDB_USER") ?? "";
 if (string.IsNullOrEmpty(user))
 {
-    Console.Error.WriteLine("CRATE_USER environment variable is not set.");
+    Console.Error.WriteLine("CRATEDB_USER environment variable is not set.");
     Environment.Exit(ExitNoUser);
     return;
 }
 
-var password = Environment.GetEnvironmentVariable("CRATE_PASSWORD") ?? "";
+var password = Environment.GetEnvironmentVariable("CRATEDB_PASSWORD") ?? "";
 if (string.IsNullOrEmpty(password))
 {
-    Console.Error.WriteLine("CRATE_PASSWORD environment variable is not set.");
+    Console.Error.WriteLine("CRATEDB_PASSWORD environment variable is not set.");
     Environment.Exit(ExitNoPassword);
     return;
 }

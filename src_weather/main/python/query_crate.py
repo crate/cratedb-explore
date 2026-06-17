@@ -19,7 +19,7 @@ Load-generator that connects to a CrateDB cluster over the PostgreSQL
 wire protocol and runs a configurable mix of queries against climate data.
 
 Usage:
-    CRATE_USER=<user> CRATE_PASSWORD=<password> \
+    CRATEDB_USER=<user> CRATEDB_PASSWORD=<password> \
     python query_crate.py \
         <duration-seconds> <host> <requests-per-second> <sslmode> \
         [TYPE:COUNT ...]
@@ -32,8 +32,8 @@ Exit codes:
     1 — too few command-line arguments (usage error)
     2 — duration-seconds is not a valid integer
     3 — requests-per-second is not a valid positive integer
-    4 — CRATE_USER environment variable is missing
-    5 — CRATE_PASSWORD environment variable is missing
+    4 — CRATEDB_USER environment variable is missing
+    5 — CRATEDB_PASSWORD environment variable is missing
     6 — TYPE:COUNT argument has bad format
     7 — unknown query type
     8 — query count is not a valid positive integer
@@ -367,14 +367,14 @@ def main():
     ssl_mode = args[3]
 
     # Credentials from environment variables so they don't appear in shell history.
-    user = os.environ.get("CRATE_USER", "")
+    user = os.environ.get("CRATEDB_USER", "")
     if not user:
-        print("CRATE_USER environment variable is not set.", file=sys.stderr)
+        print("CRATEDB_USER environment variable is not set.", file=sys.stderr)
         sys.exit(EXIT_NO_USER)
 
-    password = os.environ.get("CRATE_PASSWORD", "")
+    password = os.environ.get("CRATEDB_PASSWORD", "")
     if not password:
-        print("CRATE_PASSWORD environment variable is not set.", file=sys.stderr)
+        print("CRATEDB_PASSWORD environment variable is not set.", file=sys.stderr)
         sys.exit(EXIT_NO_PASSWORD)
 
     # --- Parse optional TYPE:COUNT arguments ---
