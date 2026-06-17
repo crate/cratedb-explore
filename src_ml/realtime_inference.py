@@ -38,6 +38,7 @@ Test with curl:
 import json
 import os
 import pickle
+import sys
 import time
 import warnings
 from contextlib import asynccontextmanager
@@ -48,7 +49,10 @@ import pandas as pd
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+from data_source import connection_error, make_engine
 
 warnings.filterwarnings('ignore')
 
@@ -88,9 +92,15 @@ async def lifespan(app: FastAPI):
     print(f'  Anomaly:     {_iso["model_name"]}')
 
     print(f'Connecting to CrateDB at {CRATEDB_URL} ...')
-    _engine = create_engine(CRATEDB_URL, echo=False)
-    with _engine.connect() as conn:
-        conn.execute(text('SELECT 1'))
+    _engine = make_engine(CRATEDB_URL)
+    try:
+        with _engine.connect() as conn:
+            conn.execute(text('SELECT 1'))
+    except SQLAlchemyError as exc:
+        # Turn a 401 / unreachable-host stack trace into a one-line message and
+        # stop the server cleanly instead of dumping the full traceback.
+        print(f'\n{connection_error(_engine, exc)}', file=sys.stderr)
+        raise SystemExit(1) from None
     print('  Connected.')
 
     # Create predictions table if it does not exist

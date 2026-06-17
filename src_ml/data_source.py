@@ -71,7 +71,7 @@ def make_engine(url: str):
     return create_engine(resolved, echo=False)
 
 
-def _connection_error(engine, exc):
+def connection_error(engine, exc):
     """Turn a noisy SQLAlchemy/crate stack trace into a one-line SystemExit."""
     host = engine.url.render_as_string(hide_password=True)
     detail = str(exc)
@@ -94,7 +94,7 @@ def _query(engine, sql: str, params=None):
     try:
         return pd.read_sql(text(sql), engine, params=params)
     except SQLAlchemyError as exc:
-        raise _connection_error(engine, exc) from exc
+        raise connection_error(engine, exc) from exc
 
 
 def _coerce_timestamp(series):
