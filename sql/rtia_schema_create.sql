@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS rtia.iot_data (
 COPY rtia.plants           FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/plants.json'  WITH (format = 'json');
 COPY rtia.devices          FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/devices.json'          WITH (format = 'json');
 COPY rtia.maintenance_log  FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/maintenance_log.json'  WITH (format = 'json');
-COPY rtia.iot_data         FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/iot_demo_dataset.json' WITH (format = 'json');
+COPY rtia.iot_data         FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/iot_demo_dataset.json' WITH (format = 'json', compression = 'gzip');
 
 
 -- ── 5. LOCATIONS ──────────────────────────────────────────────────────────────
