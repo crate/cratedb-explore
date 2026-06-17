@@ -100,9 +100,10 @@ CREATE TABLE IF NOT EXISTS rtia.iot_data (
         geo_lat       DOUBLE PRECISION
     ),
     day          TIMESTAMP WITH TIME ZONE GENERATED ALWAYS AS date_trunc('day', "timestamp"),
+    event_week          TIMESTAMP WITH TIME ZONE GENERATED ALWAYS AS date_trunc('week', "timestamp"),
     geo_location GEO_POINT GENERATED ALWAYS AS [fields['geo_lon'], fields['geo_lat']],
-    PRIMARY KEY (hash_id, "timestamp", day)
-) PARTITIONED BY (day);
+    PRIMARY KEY (hash_id, "timestamp", event_week)
+) PARTITIONED BY (event_week);
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -117,8 +118,7 @@ CREATE TABLE IF NOT EXISTS rtia.iot_data (
 COPY rtia.plants           FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/plants.json'  WITH (format = 'json');
 COPY rtia.devices          FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/devices.json'          WITH (format = 'json');
 COPY rtia.maintenance_log  FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/maintenance_log.json'  WITH (format = 'json');
-COPY rtia.iot_data         FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/iot_demo_dataset.json' WITH (format = 'json', compression = 'gzip');
-
+COPY rtia.iot_data         FROM 'https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/iot_demo_dataset.json' WITH (format = 'json');
 
 -- ── 5. LOCATIONS ──────────────────────────────────────────────────────────────
 -- Reference geometries for geo queries (DISTANCE / WITHIN). Lets the advanced
