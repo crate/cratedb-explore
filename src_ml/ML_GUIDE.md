@@ -8,7 +8,7 @@ By the end you will have:
 
 - **A trained fault classifier** — XGBoost, trained on per-device rolling windows (5, 10, 20 readings), split by `device_id` to prevent leakage, with class-imbalance correction. Outputs `fault_probability` for the next 5 readings.
 - **A trained anomaly detector** — Isolation Forest fit on normal readings only. Scores any reading on how far it deviates from the healthy-fleet baseline, independent of whether a fault label was ever assigned.
-- **Two ways to score** — a batch script (`predict.py`) for offline or scheduled use, and a FastAPI service (`realtime_inference.py`) that fetches rolling context from CrateDB per request and writes predictions back.
+- **Two ways to score** — a batch script (`predict.py`) for offline or scheduled use, and a [FastAPI](https://fastapi.tiangolo.com/) service (`realtime_inference.py`) that fetches rolling context from CrateDB per request and writes predictions back.
 - **An understanding of when CrateDB replaces the JSON file** — for recurring retraining, large-scale feature pre-aggregation, and live scoring where historical context cannot be shipped as a file.
 
 The three scenarios in the "Using CrateDB as the data source" section are the practical bridge between a working demo and a production pipeline.
@@ -351,7 +351,7 @@ pip install -r requirements.txt
 ```
 
 `sqlalchemy-cratedb` registers the `crate://` SQLAlchemy dialect (and pulls in
-the official `crate` client); `sqlalchemy` itself backs `pandas.read_sql()`.
+the official `crate` client); [`sqlalchemy`](https://www.sqlalchemy.org/) itself backs `pandas.read_sql()`.
 
 Both `train_model.py` and `predict.py` build the engine for you: pass the host
 with `--cratedb-url` (or the `CRATEDB_URL` env var) and supply credentials via
@@ -626,7 +626,7 @@ export CRATEDB_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
 ```
 
 Make sure you have installed the dependencies (`requirements.txt` already 
-includes FastAPI/uvicorn and
+includes [FastAPI](https://fastapi.tiangolo.com/)/[uvicorn](https://www.uvicorn.org/) and
 the CrateDB tier — `sqlalchemy-cratedb` registers the `crate://` dialect the
 service connects through), then:
 
@@ -650,7 +650,7 @@ We now have a series of endpoints we can use for real time inference:
 | `POST` | `/score/batch` | Score a list of devices in one call |
 | `GET` | `/fleet/high-risk` | Devices with `fault_probability` above a threshold |
 
-### Test with curl
+Plea Test with curl
 
 ```bash
 # Check the service is up and show model metadata
