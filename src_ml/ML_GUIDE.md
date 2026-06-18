@@ -582,7 +582,7 @@ This section covers a FastAPI service that answers that question on demand. It f
 
 The model's two strongest features (`fault_rate_5`, `fault_rate_10`) are computed over the last 5 and 10 readings of each device. A single new reading carries no context on its own — scoring it requires the device's recent history.
 
-This is why CrateDB is required at inference time, not just training time. The full history lives there, and `rtia.iot_data` is `PARTITIONED BY (day)` with `tags['device_id']` indexed (every key in the `tags` object is indexed by default). A recent-history lookup for one device prunes to the latest day partitions and uses that index, so fetching the last 50 readings returns in single-digit milliseconds.
+This is why CrateDB is required at inference time, not just training time. The full history lives there, and `rtia.iot_data` is `PARTITIONED BY (event_week)` with `tags['device_id']` indexed (every key in the `tags` object is indexed by default). A recent-history lookup for one device prunes to the latest weekly partitions and uses that index, so fetching the last 50 readings returns in single-digit milliseconds.
 
 ### Architecture
 
