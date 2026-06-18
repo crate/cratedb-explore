@@ -626,7 +626,7 @@ export CRATEDB_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
 ```
 
 Make sure you have installed the dependencies (`requirements.txt` already 
-includes [FastAPI](https://fastapi.tiangolo.com/)/[uvicorn](https://www.uvicorn.org/) and
+includes [FastAPI](https://fastapi.tiangolo.com/)/[uvicorn](https://uvicorn.dev/) and
 the CrateDB tier — `sqlalchemy-cratedb` registers the `crate://` dialect the
 service connects through), then:
 
