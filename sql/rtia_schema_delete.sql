@@ -24,3 +24,4 @@ DROP TABLE IF EXISTS rtia.devices;
 DROP TABLE IF EXISTS rtia.plants;
 DROP TABLE IF EXISTS rtia.locations;
 DROP TABLE IF EXISTS rtia.knn_searches;
+DROP TABLE IF EXISTS rtia.fault_predictions;

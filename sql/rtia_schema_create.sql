@@ -220,3 +220,23 @@ INSERT INTO rtia.knn_searches (query_name, search_string, embedding) VALUES
 ON CONFLICT (search_string) DO UPDATE SET
     query_name = excluded.query_name,
     embedding  = excluded.embedding;
+
+
+-- ── 7. FAULT_PREDICTIONS ──────────────────────────────────────────────────────
+-- Output of the src_ml predictive-maintenance scoring (Scenario 3 batch scoring
+-- and the realtime_inference.py API). One row per (device, scoring run). The
+-- Python scorers no longer auto-create this table — they fail with a clear
+-- message if it is missing — so its definition lives here.
+
+CREATE TABLE IF NOT EXISTS rtia.fault_predictions (
+    device_id         TEXT,
+    scored_at         TIMESTAMP WITH TIME ZONE,
+    latest_reading_ts TIMESTAMP WITH TIME ZONE,
+    device_type       TEXT,
+    plant_id          TEXT,
+    current_status    TEXT,
+    fault_probability DOUBLE PRECISION,
+    fault_risk_label  TEXT,
+    anomaly_score     DOUBLE PRECISION,
+    PRIMARY KEY (device_id, scored_at)
+);

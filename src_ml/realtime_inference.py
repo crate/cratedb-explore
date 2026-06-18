@@ -103,8 +103,12 @@ async def lifespan(app: FastAPI):
         raise SystemExit(1) from None
     print('  Connected.')
 
-    # Create predictions table if it does not exist
-    _ensure_predictions_table()
+    # Predictions table must already exist (see sql/rtia_schema_create.sql)
+    try:
+        _require_predictions_table()
+    except RuntimeError as exc:
+        print(f'\n{exc}', file=sys.stderr)
+        raise SystemExit(1) from None
     print('Ready.')
 
     yield
@@ -121,24 +125,21 @@ app = FastAPI(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _ensure_predictions_table():
-    ddl = """
-        CREATE TABLE IF NOT EXISTS rtia.fault_predictions (
-            device_id         TEXT,
-            scored_at         TIMESTAMP WITH TIME ZONE,
-            latest_reading_ts TIMESTAMP WITH TIME ZONE,
-            device_type       TEXT,
-            plant_id          TEXT,
-            current_status    TEXT,
-            fault_probability DOUBLE PRECISION,
-            fault_risk_label  TEXT,
-            anomaly_score     DOUBLE PRECISION,
-            PRIMARY KEY (device_id, scored_at)
-        )
-    """
+def _require_predictions_table():
+    """Verify rtia.fault_predictions exists. It is created by
+    sql/rtia_schema_create.sql, not here — fail with a clear message if missing
+    rather than silently creating it."""
+    check = text("""
+        SELECT count(*) FROM information_schema.tables
+        WHERE table_schema = 'rtia' AND table_name = 'fault_predictions'
+    """)
     with _engine.connect() as conn:
-        conn.execute(text(ddl))
-        conn.commit()
+        exists = conn.execute(check).scalar()
+    if not exists:
+        raise RuntimeError(
+            'Table rtia.fault_predictions not found — '
+            'create the schema first:  crash < sql/rtia_schema_create.sql'
+        )
 
 
 def _fmt_ts(v):

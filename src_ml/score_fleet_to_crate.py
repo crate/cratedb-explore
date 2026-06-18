@@ -37,27 +37,30 @@ from sqlalchemy import text
 import data_source
 import predict   # reuse flatten_records / build_features / _load_models / paths
 
-# Columns + canonical DDL — identical to realtime_inference.py's rtia.fault_predictions.
+# Columns written to the destination table — must match rtia.fault_predictions
+# as defined in sql/rtia_schema_create.sql.
 CANON_COLS = ['device_id', 'scored_at', 'latest_reading_ts', 'device_type',
               'plant_id', 'current_status', 'fault_probability',
               'fault_risk_label', 'anomaly_score']
 
 
-def _ddl(table: str) -> str:
-    return f"""
-        CREATE TABLE IF NOT EXISTS {table} (
-            device_id         TEXT,
-            scored_at         TIMESTAMP WITH TIME ZONE,
-            latest_reading_ts TIMESTAMP WITH TIME ZONE,
-            device_type       TEXT,
-            plant_id          TEXT,
-            current_status    TEXT,
-            fault_probability DOUBLE PRECISION,
-            fault_risk_label  TEXT,
-            anomaly_score     DOUBLE PRECISION,
-            PRIMARY KEY (device_id, scored_at)
+def _require_table(engine, table: str):
+    """Verify the destination table exists. It is created by
+    sql/rtia_schema_create.sql, not here — fail with a clear message if missing
+    rather than silently creating it."""
+    schema, _, name = table.rpartition('.')
+    check = text("""
+        SELECT count(*) FROM information_schema.tables
+        WHERE table_schema = :schema AND table_name = :name
+    """)
+    with engine.connect() as conn:
+        exists = conn.execute(check, {'schema': schema or 'doc',
+                                      'name': name}).scalar()
+    if not exists:
+        raise SystemExit(
+            f'Table {table} not found — create the schema first:  '
+            'crash < sql/rtia_schema_create.sql'
         )
-    """
 
 
 def read_local(input_file: str, device):
@@ -128,9 +131,8 @@ def main(cratedb_url, input_file, device, table):
 
     # --- always write back to CrateDB ---
     schema, _, name = table.rpartition('.')
+    _require_table(engine, table)
     print(f'\nWriting {len(latest):,} predictions to CrateDB table {table} ...')
-    with engine.begin() as conn:
-        conn.execute(text(_ddl(table)))
     latest[CANON_COLS].to_sql(name, engine, schema=schema or None,
                               if_exists='append', index=False, method='multi')
     print(f'  wrote {len(latest):,} rows  (scored_at={latest["scored_at"].iloc[0]})')

@@ -469,7 +469,7 @@ python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --input ../d
 python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --device DEVICE_0042
 ```
 
-It creates `rtia.fault_predictions` with the canonical DDL (`CREATE TABLE IF NOT EXISTS`, the same schema `realtime_inference.py` uses) and appends — so the batch job and the live service share one table. The equivalent pipeline written out by hand:
+It appends to `rtia.fault_predictions` — the table the batch job and the live service share. That table is created by `sql/rtia_schema_create.sql`; if it is missing the script fails with a clear message rather than auto-creating it (an inferred schema would be PK-less). The equivalent pipeline written out by hand:
 
 ```python
 import pickle
@@ -514,7 +514,7 @@ df["fault_probability"] = clf["model"].predict_proba(df[clf["features"]].values)
 df["anomaly_score"]     = -iso["model"].score_samples(df[iso["features"]].values)
 
 # Keep the latest scored reading per device, then shape it to match the
-# rtia.fault_predictions table that realtime_inference.py creates — same columns,
+# rtia.fault_predictions table from sql/rtia_schema_create.sql — same columns,
 # same names — so the batch job and the live service write one schema.
 latest = df.groupby("device_id").last().reset_index()
 latest["scored_at"]         = pd.Timestamp.utcnow()
@@ -539,10 +539,11 @@ latest[cols].to_sql(
 )
 ```
 
-Create `rtia.fault_predictions` once with the canonical DDL before the first append —
-either by starting `realtime_inference.py` (it runs `CREATE TABLE IF NOT EXISTS`
-on startup) or by issuing the same statement yourself. Letting pandas auto-create
-it would infer a different, PK-less schema.
+Create `rtia.fault_predictions` once before the first append by running
+`sql/rtia_schema_create.sql` (it carries the canonical DDL). The Python scorers
+no longer create it — they check it exists on startup and stop with a clear
+message if it is missing. Letting pandas auto-create it would infer a different,
+PK-less schema.
 
 Once `rtia.fault_predictions` is populated it already carries each device's type, plant, and status (as of scoring time), so the high-risk fleet view is a direct, one-row-per-device query — no join needed:
 
@@ -705,7 +706,7 @@ SELECT
     scored_at
 FROM rtia.fault_predictions
 WHERE current_status IN ('warning', 'critical')
-  AND fault_probability > 0.60
+  AND fault_probability > 0.40
 ORDER BY fault_probability DESC
 LIMIT 20;
 ```
