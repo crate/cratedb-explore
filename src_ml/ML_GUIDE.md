@@ -706,7 +706,7 @@ SELECT
     scored_at
 FROM rtia.fault_predictions
 WHERE current_status IN ('warning', 'critical')
-  AND fault_probability > 0.40
+  AND fault_probability > 0.60
 ORDER BY fault_probability DESC
 LIMIT 20;
 ```
