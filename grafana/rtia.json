@@ -3,8 +3,8 @@
   "kind": "Dashboard",
   "metadata": {
     "name": "adf897wcc",
-    "generation": 10,
-    "creationTimestamp": "2026-06-11T13:41:36Z",
+    "generation": 12,
+    "creationTimestamp": "2026-06-17T13:15:54Z",
     "labels": {},
     "annotations": {}
   },
@@ -3332,44 +3332,6 @@
           }
         }
       },
-      "panel-39": {
-        "kind": "Panel",
-        "spec": {
-          "id": 39,
-          "title": "",
-          "description": "",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "text",
-            "version": "13.0.1",
-            "spec": {
-              "options": {
-                "code": {
-                  "language": "plaintext",
-                  "showLineNumbers": false,
-                  "showMiniMap": false
-                },
-                "content": "<img src=\"https://cratedb.com/hubfs/CrateDB-logo-blue-white.svg\"\n     alt=\"CrateDB logo\"\n     style=\"max-width: 300px; height: auto;\">",
-                "mode": "html"
-              },
-              "fieldConfig": {
-                "defaults": {},
-                "overrides": []
-              }
-            }
-          },
-          "transparent": true
-        }
-      },
       "panel-4": {
         "kind": "Panel",
         "spec": {
@@ -4089,6 +4051,129 @@
               "fieldConfig": {
                 "defaults": {},
                 "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-47": {
+        "kind": "Panel",
+        "spec": {
+          "id": 47,
+          "title": "Fault predictions",
+          "description": "Note that this is empty, until you fill it by running score_fleet_to_crate.py",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "grafana-postgresql-datasource",
+                      "version": "v0",
+                      "spec": {
+                        "dataset": "doc",
+                        "editorMode": "code",
+                        "format": "table",
+                        "rawQuery": true,
+                        "rawSql": "SELECT f.device_id AS \"Device ID\", d.manufacturer AS \"Manufacturer\", d.model AS \"Model\", d.responsible_technician AS \"Responsible Technician\"\n,       f.fault_probability * 100  AS \"Fault Probability %\", f.anomaly_score AS \"Anomoly Score\"\nFROM rtia.fault_predictions f\nJOIN rtia.devices d ON f.device_id = d.device_id\nORDER BY f.fault_probability DESC\nLIMIT 200;",
+                        "sql": {
+                          "columns": [
+                            {
+                              "parameters": [],
+                              "type": "function"
+                            }
+                          ],
+                          "groupBy": [
+                            {
+                              "property": {
+                                "type": "string"
+                              },
+                              "type": "groupBy"
+                            }
+                          ],
+                          "limit": 50
+                        }
+                      },
+                      "labels": {
+                        "grafana.app/export-label": "grafana-postgresql-datasource-2"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "13.0.1",
+            "spec": {
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "percentage",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 10,
+                        "color": "#EAB839"
+                      },
+                      {
+                        "value": 100,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "scope": "series",
+                      "options": "Fault Probability %"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-text"
+                        }
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 5
+                      }
+                    ]
+                  }
+                ]
               }
             }
           }
@@ -4889,15 +4974,6 @@
                       "spec": {
                         "element": {
                           "kind": "ElementReference",
-                          "name": "panel-39"
-                        }
-                      }
-                    },
-                    {
-                      "kind": "AutoGridLayoutItem",
-                      "spec": {
-                        "element": {
-                          "kind": "ElementReference",
                           "name": "panel-1"
                         }
                       }
@@ -4947,7 +5023,7 @@
             "kind": "RowsLayoutRow",
             "spec": {
               "title": "Critical Events",
-              "collapse": true,
+              "collapse": false,
               "layout": {
                 "kind": "AutoGridLayout",
                 "spec": {
@@ -5496,12 +5572,26 @@
           {
             "kind": "RowsLayoutRow",
             "spec": {
-              "title": "New row",
+              "title": "ML Fault Predictions",
               "collapse": false,
               "layout": {
                 "kind": "GridLayout",
                 "spec": {
-                  "items": []
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 24,
+                        "height": 8,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-47"
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -5520,8 +5610,8 @@
     ],
     "timeSettings": {
       "timezone": "browser",
-      "from": "2025-08-28T23:24:52.763Z",
-      "to": "2025-10-11T01:34:52.763Z",
+      "from": "2025-08-13T22:04:05.952Z",
+      "to": "2026-05-04T03:02:28.654Z",
       "autoRefresh": "",
       "autoRefreshIntervals": [
         "5s",
