@@ -105,6 +105,51 @@ CREATE TABLE IF NOT EXISTS rtia.iot_data (
     PRIMARY KEY (hash_id, "timestamp", event_week)
 ) PARTITIONED BY (event_week);
 
+-- Some deliberately 'broken' readings
+
+INSERT INTO rtia.iot_data
+  (hash_id, "timestamp", name, tags, fields)
+VALUES
+  (511370632469779852,'2026-05-09T00:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='warning',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=92.1,quality_score=48.3,geo_lon=9.1759,geo_lat=48.8024}),
+  (-2398337421379103462,'2026-05-09T01:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='critical',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=96.4,quality_score=41.7,geo_lon=9.1759,geo_lat=48.8024}),
+  (2017953486351486190,'2026-05-09T02:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='warning',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=94.8,quality_score=44.1,geo_lon=9.1759,geo_lat=48.8024}),
+  (-7363947286916755656,'2026-05-09T03:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='critical',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=98.2,quality_score=39.5,geo_lon=9.1759,geo_lat=48.8024}),
+  (8510566085386576200,'2026-05-09T04:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='warning',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=93.5,quality_score=46.2,geo_lon=9.1759,geo_lat=48.8024}),
+  (-6957700900984984226,'2026-05-09T05:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='critical',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=99.1,quality_score=38.0,geo_lon=9.1759,geo_lat=48.8024}),
+  (-5211816626772492950,'2026-05-09T06:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='warning',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=91.7,quality_score=50.1,geo_lon=9.1759,geo_lat=48.8024}),
+  (-2658885965052138436,'2026-05-09T07:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='critical',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=97.6,quality_score=37.4,geo_lon=9.1759,geo_lat=48.8024}),
+  (-4843216933825845228,'2026-05-09T08:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='warning',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=95.3,quality_score=43.8,geo_lon=9.1759,geo_lat=48.8024}),
+  (5788711815739869954,'2026-05-09T09:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='critical',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=100.2,quality_score=35.9,geo_lon=9.1759,geo_lat=48.8024}),
+  (-5876194767076304805,'2026-05-09T10:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='warning',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=93.9,quality_score=42.5,geo_lon=9.1759,geo_lat=48.8024}),
+  (-9058372906363060867,'2026-05-09T11:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='critical',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=101.5,quality_score=34.2,geo_lon=9.1759,geo_lat=48.8024}),
+  (289426022910203700,'2026-05-09T12:00:00Z','iot_data',
+   {device_id='DEVICE_0001',device_type='temperature_sensor',plant_id='PLANT_STUTTGART',line_id='LINE_A1',status='normal',metric_unit='C',metadata_firmware_version='3.2.5',metadata_model='SX-201',metadata_installation_date='2023-01-15',metadata_last_calibration='2025-06-01'},
+   {metric_value=88.0,quality_score=55.0,geo_lon=9.1759,geo_lat=48.8024});
+
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- IMPORT DATA
