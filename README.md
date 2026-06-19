@@ -118,7 +118,7 @@ reads all three back out of Kafka and loads them into `demo.climate_data`.
 
 A minimal Python [MCP](https://modelcontextprotocol.io) server that exposes a single `query_sql` tool over the weather dataset, so an MCP client like [Claude](https://www.anthropic.com/claude) can answer questions about the data in plain English. It is built on the official MCP Python SDK (`FastMCP`) and talks to CrateDB's HTTP `_sql` endpoint. The one non-trivial rule — using `WITHIN` to keep "in Germany" queries inside the country's borders — is baked into the server's instructions.
 
-See the [MCP Search overview](src_mcp_search/README.md) for install, configuration, and how to register it with an assistant. A draft cratedb.com walkthrough lives in [`GERMAN_WEATHER_MCP.md`](src_mcp_search/GERMAN_WEATHER_MCP.md).
+See the [MCP Search overview](src_mcp_search_german_weather/README.md) for install, configuration, and how to register it with an assistant. A draft cratedb.com walkthrough lives in [`GERMAN_WEATHER_MCP.md`](src_mcp_search_german_weather/GERMAN_WEATHER_MCP.md).
 
 ## Grafana Dashboard
 
