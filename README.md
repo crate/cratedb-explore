@@ -13,11 +13,11 @@ The repository also contains a second, self-contained scenario — **[Real Time 
 
 ## Weather Load Generators
 
-| Language | Directory | Driver |
-| -------- | --------- | ------ |
-| [Java](src_weather/main/java/README.md) | `src_weather/main/java/` | JDBC (`postgresql`) |
-| [Python](src_weather/main/python/README.md) | `src_weather/main/python/` | [psycopg2](https://www.psycopg.org/) |
-| [.NET (C#)](src_weather/main/dotnet/README.md) | `src_weather/main/dotnet/` | [Npgsql](https://www.npgsql.org/) |
+| Language                                       | Directory                  | Driver                               |
+| ---------------------------------------------- | -------------------------- | ------------------------------------ |
+| [Java](src_weather/main/java/README.md)        | `src_weather/main/java/`   | JDBC (`postgresql`)                  |
+| [Python](src_weather/main/python/README.md)    | `src_weather/main/python/` | [psycopg2](https://www.psycopg.org/) |
+| [.NET (C#)](src_weather/main/dotnet/README.md) | `src_weather/main/dotnet/` | [Npgsql](https://www.npgsql.org/)    |
 
 ### Query types
 
@@ -33,36 +33,36 @@ See each implementation's `Query types` section ([Java](src_weather/main/java/RE
 
 After each run, every implementation writes a `latency_histogram.png` to its working directory — a percentile-distribution plot (50%, 90%, 99%, 99.9%, 99.99%) with one line per query type, rendered with the platform's native plotting library. The shape is the same in all three (REGION climbs into a tail plateau, WKT/FTS stay low); only the styling differs.
 
-| Java &mdash; [JFreeChart](https://www.jfree.org/jfreechart/) | Python &mdash; [matplotlib](https://matplotlib.org/) | .NET &mdash; [ScottPlot](https://scottplot.net/) |
-| --- | --- | --- |
+| Java &mdash; [JFreeChart](https://www.jfree.org/jfreechart/)                                                         | Python &mdash; [matplotlib](https://matplotlib.org/)                                                                       | .NET &mdash; [ScottPlot](https://scottplot.net/)                                                                         |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | [<img src="doc/latency_histogram_java.png" alt="Java latency chart">](src_weather/main/java/README.md#latency-chart) | [<img src="doc/latency_histogram_python.png" alt="Python latency chart">](src_weather/main/python/README.md#latency-chart) | [<img src="doc/latency_histogram_dotnet.png" alt=".NET latency chart">](src_weather/main/dotnet/README.md#latency-chart) |
 
 ## KNN Search CLI
 
 Interactive search tool for CrateDB's `german_regions` table. Supports semantic search via OpenAI embeddings + `KNN_MATCH`, and BM25 fulltext search via `MATCH` — no OpenAI key needed for fulltext mode.
 
-| Language | Directory | Driver |
-| -------- | --------- | ------ |
-| [Java](src_knn_search/main/java/README.md) | `src_knn_search/main/java/` | JDBC (`postgresql`) + [Gson](https://github.com/google/gson) |
-| [Python](src_knn_search/main/python/README.md) | `src_knn_search/main/python/` | [psycopg](https://www.psycopg.org/) + [OpenAI](https://github.com/openai/openai-python) |
-| [.NET (C#)](src_knn_search/main/dotnet/README.md) | `src_knn_search/main/dotnet/` | [Npgsql](https://www.npgsql.org/) |
+| Language                                          | Directory                     | Driver                                                                                  |
+| ------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------- |
+| [Java](src_knn_search/main/java/README.md)        | `src_knn_search/main/java/`   | JDBC (`postgresql`) + [Gson](https://github.com/google/gson)                            |
+| [Python](src_knn_search/main/python/README.md)    | `src_knn_search/main/python/` | [psycopg](https://www.psycopg.org/) + [OpenAI](https://github.com/openai/openai-python) |
+| [.NET (C#)](src_knn_search/main/dotnet/README.md) | `src_knn_search/main/dotnet/` | [Npgsql](https://www.npgsql.org/)                                                       |
 
 ## Data and Schema
 
 The `sql/` directory contains the DDL and DML needed to set up the demo tables:
 
-| File | Description |
-| ---- | ----------- |
+| File                                                             | Description                                                                      |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | [`german_weather_data_ddl.sql`](sql/german_weather_data_ddl.sql) | `CREATE TABLE` statements for `climate_data`, `german_regions`, and `geo_points` |
-| [`german_weather_data_dml.sql`](sql/german_weather_data_dml.sql) | `COPY FROM` and `INSERT` statements to load reference data |
+| [`german_weather_data_dml.sql`](sql/german_weather_data_dml.sql) | `COPY FROM` and `INSERT` statements to load reference data                       |
 
 The `data/` directory contains the reference datasets:
 
-| File | Description |
-| ---- | ----------- |
-| [`geo_points.json`](data/geo_points.json) | 726 weather station locations with nearest-town mappings |
-| [`german_regions.json`](data/german_regions.json) | 16 German states with boundaries, fulltext columns, and embeddings |
-| [`export-demo_climate_data_large_v2.json`](data/export-demo_climate_data_large_v2.json) | Climate measurement readings |
+| File                                                                                    | Description                                                        |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [`geo_points.json`](data/geo_points.json)                                               | 726 weather station locations with nearest-town mappings           |
+| [`german_regions.json`](data/german_regions.json)                                       | 16 German states with boundaries, fulltext columns, and embeddings |
+| [`export-demo_climate_data_large_v2.json`](data/export-demo_climate_data_large_v2.json) | Climate measurement readings                                       |
 
 ### Loading the data with `COPY FROM`
 
@@ -124,8 +124,8 @@ See the [MCP Search overview](src_mcp_search_german_weather/README.md) for insta
 
 The `grafana/` directory contains pre-built dashboards for visualizing the data:
 
-| File | Description |
-| ---- | ----------- |
+| File                                                           | Description                                                                                                                                             |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`german_weather_data.json`](grafana/german_weather_data.json) | Importable Grafana dashboard with geomap, gauge, and time-series panels for the weather data. Connects to CrateDB via the PostgreSQL datasource plugin. |
 
 To use one, add a PostgreSQL datasource in Grafana pointing at your CrateDB cluster, then import the JSON file via **Dashboards > Import**.
@@ -136,12 +136,12 @@ A second, self-contained demo scenario that applies the same CrateDB techniques 
 
 Unlike the weather demo, RTIA has **no load generator** — it is delivered entirely as SQL scripts plus a Grafana dashboard. The data is pulled straight from a public S3 bucket by the `COPY FROM` statements in the schema script, so there is nothing to load by hand. Run the four scripts in order:
 
-| File | Description |
-| ---- | ----------- |
-| [`rtia_schema_create.sql`](sql/rtia_schema_create.sql) | Creates the `rtia` tables (`plants`, `devices`, `maintenance_log`, `iot_data`, `locations`, `knn_searches`) and loads them with `COPY FROM` against the public S3 dataset. |
-| [`rtia_first_queries.sql`](sql/rtia_first_queries.sql) | Introductory analytics — ingest check, status distribution, fault rate by device type, hourly fault trend, alert density per plant, maintenance cost, and an OEE approximation. |
-| [`rtia_advanced_queries.sql`](sql/rtia_advanced_queries.sql) | Advanced patterns — geo (`DISTANCE`/`WITHIN`), full-text `MATCH` on maintenance notes, vector `KNN_MATCH` semantic search, and a hybrid vector + full-text combined score. |
-| [`rtia_schema_delete.sql`](sql/rtia_schema_delete.sql) | `DROP TABLE` statements to tear the scenario down. |
+| File                                                         | Description                                                                                                                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`rtia_schema_create.sql`](sql/rtia_schema_create.sql)       | Creates the `rtia` tables (`plants`, `devices`, `maintenance_log`, `iot_data`, `locations`, `knn_searches`) and loads them with `COPY FROM` against the public S3 dataset.      |
+| [`rtia_first_queries.sql`](sql/rtia_first_queries.sql)       | Introductory analytics — ingest check, status distribution, fault rate by device type, hourly fault trend, alert density per plant, maintenance cost, and an OEE approximation. |
+| [`rtia_advanced_queries.sql`](sql/rtia_advanced_queries.sql) | Advanced patterns — geo (`DISTANCE`/`WITHIN`), full-text `MATCH` on maintenance notes, vector `KNN_MATCH` semantic search, and a hybrid vector + full-text combined score.      |
+| [`rtia_schema_delete.sql`](sql/rtia_schema_delete.sql)       | `DROP TABLE` statements to tear the scenario down.                                                                                                                              |
 
 The maintenance-note vectors are 384-dimension `FLOAT_VECTOR` embeddings (sentence-transformers `all-MiniLM-L6-v2`), queried with `KNN_MATCH` for semantic search and combined with `MATCH` for hybrid relevance.
 
