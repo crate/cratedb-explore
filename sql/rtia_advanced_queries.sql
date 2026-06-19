@@ -40,38 +40,6 @@
 -- Flags devices where the recent window is >10% higher than the prior window —
 -- the early-drift signature used in predictive maintenance workflows.
 
-SELECT
-      device_id,
-      device_type,
-      plant_id,
-      ROUND(avg_prior,  2) AS avg_prior_6h,
-      ROUND(avg_recent, 2) AS avg_recent_6h,
-      ROUND(avg_recent - avg_prior, 2) AS absolute_delta,
-      ROUND((avg_recent - avg_prior) / NULLIF(avg_prior, 0) * 100, 1) AS pct_change
-  FROM (
-      SELECT
-          tags['device_id']   AS device_id,
-          tags['device_type'] AS device_type,
-          tags['plant_id']    AS plant_id,
-          AVG(CASE WHEN "timestamp" >= TIMESTAMP '2025-09-07 06:00:00'
-                    AND "timestamp" <  TIMESTAMP '2025-09-07 12:00:00'
-                   THEN fields['metric_value'] END) AS avg_recent,
-          AVG(CASE WHEN "timestamp" >= TIMESTAMP '2025-09-07 00:00:00'
-                    AND "timestamp" <  TIMESTAMP '2025-09-07 06:00:00'
-                   THEN fields['metric_value'] END) AS avg_prior
-      FROM rtia.iot_data
-      WHERE "timestamp" >= TIMESTAMP '2025-09-07 00:00:00'
-        AND "timestamp" <  TIMESTAMP '2025-09-07 12:00:00'
-      GROUP BY tags['device_id'], tags['device_type'], tags['plant_id']
-  ) windows
-  WHERE avg_prior IS NOT NULL
-    AND (avg_recent - avg_prior) / NULLIF(avg_prior, 0) > 0.10
-  ORDER BY pct_change DESC
-  LIMIT 20
-
-
--- not good
-
 WITH windows AS (
     SELECT
         tags['device_id']   AS device_id,
@@ -249,7 +217,7 @@ ORDER BY km_from_stuttgart;
 
 
 -- ── 6. GEO: CRITICAL READINGS WITHIN A RADIUS ────────────────────────────────
--- All critical sensor events within 100 km of Frankfurt
+-- All critical sensor events within 150 km of Frankfurt
 
 SELECT
     tags['device_id']   AS device_id,

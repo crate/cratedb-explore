@@ -169,7 +169,7 @@ ORDER BY fault_readings_after_service DESC
 LIMIT 10;
 
 
--- ── 11. OBJECT FIELD ACCESS: FAULT RATE BY FIRMWARE VERSION ─────────────────
+-- ── 10. OBJECT FIELD ACCESS: FAULT RATE BY FIRMWARE VERSION ─────────────────
 -- Demonstrates bracket notation on the tags OBJECT column. Telegraf flattens the
 -- per-device metadata into tags['metadata_*'] (it can only carry flat strings),
 -- so the firmware/model dimensions live there.
@@ -188,7 +188,7 @@ ORDER BY critical_count DESC
 LIMIT 20;
 
 
--- ── 12. DATE_BIN: FIXED-WIDTH 15-MINUTE TIME WINDOWS ─────────────────────────
+-- ── 11. DATE_BIN: FIXED-WIDTH 15-MINUTE TIME WINDOWS ─────────────────────────
 -- DATE_BIN buckets readings into precise fixed-width intervals regardless of
 -- natural calendar boundaries — useful for shift reporting and SLA windows.
 
@@ -205,7 +205,7 @@ GROUP BY window_start, tags['device_type']
 ORDER BY window_start, device_type;
 
 
--- ── 10. AGGREGATED MAINTENANCE COST BY PLANT ─────────────────────────────────
+-- ── 12. AGGREGATED MAINTENANCE COST BY PLANT ─────────────────────────────────
 -- maintenance_log + plants  →  operational spend overview
 
 SELECT
