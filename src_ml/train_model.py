@@ -265,8 +265,9 @@ def make_target(df: pd.DataFrame, horizon: int) -> pd.DataFrame:
 
     pos = df['target'].sum()
     neg = (df['target'] == 0).sum()
+    ratio = f'{neg/pos:.1f}:1' if pos else 'n/a (no fault_incoming rows)'
     print(f'  Rows after trim: {len(df):,}  |  healthy: {neg:,}  |  fault_incoming: {pos:,}  '
-          f'|  imbalance ratio: {neg/pos:.1f}:1')
+          f'|  imbalance ratio: {ratio}')
     return df
 
 
@@ -311,6 +312,13 @@ def train_classifier(X_train, y_train, X_test, y_test, test_df):
 
     pos = (y_train == 1).sum()
     neg = (y_train == 0).sum()
+
+    if pos == 0 or neg == 0:
+        only = 'fault_incoming' if neg == 0 else 'healthy'
+        raise SystemExit(
+            f'\nTraining split has only one class ({only}) — cannot fit a '
+            f'classifier (needs both healthy and fault_incoming). This usually '
+            f'means the data window is too narrow; see the --days guidance above.')
 
     try:
         from xgboost import XGBClassifier
@@ -510,6 +518,28 @@ def main(cratedb_url=None, days=None, input_file=DATA_FILE):
 
     # Target
     df = make_target(df, HORIZON)
+
+    # Guard: the classifier needs both classes. Fail clearly here instead of
+    # deep inside xgboost.fit() ("Invalid classes inferred from unique values
+    # of `y`"). The default CrateDB window (latest 90 days) is the usual culprit:
+    # if the most recent rows are an injected-fault batch dated well after the
+    # historical data, the window sees only faults -> a single-class target.
+    classes = sorted(int(c) for c in df['target'].unique())
+    if len(classes) < 2:
+        only = 'fault_incoming' if classes == [1] else 'healthy'
+        if cratedb_url and days is None:
+            hint = ('Re-run with --days 0 (all history) or a wider --days N. '
+                    'The default window pulls the last 90 days relative to the '
+                    'LATEST reading, so a fault batch dated far after the '
+                    'historical data leaves only faults in range — check that '
+                    'rtia.iot_data is one contiguous timeline.')
+        elif cratedb_url:
+            hint = 'Re-run with a wider --days window or --days 0 (all history).'
+        else:
+            hint = 'Check that the input dataset spans both healthy and faulty readings.'
+        raise SystemExit(
+            f'\nTraining target has only one class ({only}); the classifier needs '
+            f'both healthy and fault_incoming examples.\n  {hint}')
 
     # Split
     print('\nSplitting by device ...')
