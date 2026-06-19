@@ -41,7 +41,11 @@ DEFAULTS = {
 
 def parse_args() -> argparse.Namespace:
     """CLI flags. All default to None so environment variables can layer
-    underneath them in resolve_endpoint."""
+    underneath them in resolve_endpoint.
+
+    Uses parse_known_args so the module can be imported by the MCP CLI
+    (`mcp dev`/`mcp run`/`mcp install`), which re-passes its own argv — the
+    extra tokens are ignored instead of aborting at import time."""
     p = argparse.ArgumentParser(
         description="MCP server over the CrateDB Industrial-IoT (rtia) schema.",
     )
@@ -56,7 +60,7 @@ def parse_args() -> argparse.Namespace:
         help="Base URL of the realtime_inference FastAPI service "
         "(default http://localhost:8000).",
     )
-    return p.parse_args()
+    return p.parse_known_args()[0]
 
 
 def resolve_endpoint(args: argparse.Namespace) -> tuple[str, tuple[str, str], str]:
