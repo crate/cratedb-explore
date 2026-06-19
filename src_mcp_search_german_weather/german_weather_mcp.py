@@ -59,6 +59,10 @@ def resolve_endpoint(args: argparse.Namespace) -> tuple[str, tuple[str, str]]:
     --cratedb-* flag (which forces the host-parts path so a
     CRATEDB_CLUSTER_URL in the environment can't silently override it);
     CRATEDB_CLUSTER_URL; then host parts from CRATEDB_* env vars / defaults.
+
+    Credentials are kept separate so there is a single source of truth: when a
+    URL carries no userinfo, the user/password still come from CRATEDB_USER /
+    CRATEDB_PASSWORD (then the defaults), so you never embed them in the URL.
     """
     part_flags = (
         args.cratedb_host,
@@ -75,8 +79,8 @@ def resolve_endpoint(args: argparse.Namespace) -> tuple[str, tuple[str, str]]:
         scheme = u.scheme or DEFAULTS["scheme"]
         host = u.hostname or DEFAULTS["host"]
         port = str(u.port or DEFAULTS["port"])
-        user = u.username or DEFAULTS["user"]
-        password = u.password or DEFAULTS["password"]
+        user = u.username or os.environ.get("CRATEDB_USER") or DEFAULTS["user"]
+        password = u.password or os.environ.get("CRATEDB_PASSWORD") or DEFAULTS["password"]
     else:
         scheme = args.cratedb_scheme or os.environ.get("CRATEDB_SCHEME") or DEFAULTS["scheme"]
         host = args.cratedb_host or os.environ.get("CRATEDB_HOST") or DEFAULTS["host"]

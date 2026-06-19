@@ -49,6 +49,12 @@ variables — flags win.
 | `--cratedb-password` | `CRATEDB_PASSWORD` | `a_password` |
 | `--cratedb-scheme` | `CRATEDB_SCHEME` | `http` |
 
+Credentials are a single pair: even when you point the server at a cluster with
+`--cratedb-url` / `CRATEDB_CLUSTER_URL`, the user and password come from
+`CRATEDB_USER` / `CRATEDB_PASSWORD` unless you embed them in the URL — so you
+don't have to put credentials in the URL. The repo-level `../env.example.sh`
+sets all of this for you.
+
 ## Try it with the MCP Inspector
 
 The `mcp` dev CLI launches the server with a web Inspector so you can call the

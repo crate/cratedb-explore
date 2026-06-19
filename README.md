@@ -21,6 +21,8 @@ cp env.example.sh env.sh   # env.sh is gitignored — safe for real credentials
 source env.sh
 ```
 
+You only set **one server, one user, and one password** — `CRATEDB_HOST`, `CRATEDB_USER`, `CRATEDB_PASSWORD`, and `CRATEDB_SCHEME` in the template's *EDIT THESE* block. The various protocol-specific connection URLs each module needs (`CRATEDB_CLUSTER_URL` for the MCP servers over HTTP, `CRATEDB_ALCHEMY_URL` for `src_ml`'s SQLAlchemy `crate://`, `CRATEDB_URL` for the stream-load consumer, the PostgreSQL `CRATEDB_PORT` for the KNN CLI) are **derived** from those in the *DERIVED* block — leave them alone. Credentials are never embedded in the URLs; every module reads them from `CRATEDB_USER` / `CRATEDB_PASSWORD`, so there is a single place to change them.
+
 Each module consumes only the variables it needs, so one sourced file covers the load generators, the KNN CLI, the MCP servers, `src_ml`, and the stream-load and Telegraf scenarios. The per-module READMEs document their own variables in detail.
 
 ## Weather Load Generators

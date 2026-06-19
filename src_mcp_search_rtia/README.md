@@ -69,11 +69,27 @@ or the matching environment variables — flags win.
 | `--cratedb-scheme` | `CRATEDB_SCHEME` | `http` |
 | `--inference-url` | `INFERENCE_URL` | `http://localhost:8000` |
 
+Credentials are a single pair: even when you point the server at a cluster with
+`--cratedb-url` / `CRATEDB_CLUSTER_URL`, the user and password come from
+`CRATEDB_USER` / `CRATEDB_PASSWORD` unless you embed them in the URL — so you
+don't have to put credentials in the URL. The repo-level `../env.example.sh`
+sets all of this for you.
+
 ## Run the inference service
 
 The scoring tools (`score_device`, `score_batch`, `fleet_high_risk`,
 `inference_health`) proxy the FastAPI service from `src_ml/`. Start it in a
 separate window first — see `../src_ml/ML_GUIDE.md` for the full walkthrough:
+
+If you haven't already run the ML stuff you'll need to create a venv and load the 
+requirements first:
+```bash
+cd ../src_ml
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+```
 
 ```bash
 cd ../src_ml
@@ -81,6 +97,8 @@ source .venv/bin/activate
 source ../env.sh      # CRATEDB_ALCHEMY_URL + credentials (see ../env.example.sh)
 uvicorn realtime_inference:app --reload --port 8000
 ```
+
+Now return to your original window..
 
 `query_sql` works without it; only the four inference tools need it.
 
