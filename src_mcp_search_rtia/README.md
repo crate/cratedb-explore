@@ -82,12 +82,13 @@ The scoring tools (`score_device`, `score_batch`, `fleet_high_risk`,
 separate window first — see `../src_ml/ML_GUIDE.md` for the full walkthrough:
 
 If you haven't already run the ML stuff you'll need to create a venv and load the 
-requirements first:
+requirements and build the model first:
 ```bash
 cd ../src_ml
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+python train_model.py
 
 ```
 
@@ -110,6 +111,12 @@ tools by hand:
 ```bash
 mcp dev rtia_mcp.py
 ```
+
+> **Requires Node.js.** The Inspector is a Node app, so `mcp dev` shells out to
+> `npx`; without it you'll see `npx not found`. Install Node first (e.g.
+> `brew install node`), or skip the Inspector and register the server with a
+> client (below) instead. Remember to `source ../env.sh` first so it connects to
+> your cluster.
 
 Call `query_sql` with `SELECT 1` to confirm connectivity, then try a real query
 such as `SELECT device_id, device_type, plant_id FROM devices ORDER BY 1 LIMIT 5`.

@@ -64,6 +64,12 @@ tool by hand:
 mcp dev german_weather_mcp.py
 ```
 
+> **Requires Node.js.** The Inspector is a Node app, so `mcp dev` shells out to
+> `npx`; without it you'll see `npx not found`. Install Node first (e.g.
+> `brew install node`), or skip the Inspector and register the server with a
+> client (below) instead. Remember to `source ../env.sh` first so it connects to
+> your cluster.
+
 Call `query_sql` with `SELECT 1` to confirm connectivity, then try a real query
 such as `SELECT region_name FROM german_regions ORDER BY 1`.
 
