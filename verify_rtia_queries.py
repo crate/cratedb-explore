@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Run every statement in sql/rtia_first_queries.sql and
+sql/rtia_advanced_queries.sql against CrateDB's HTTP _sql endpoint (schema rtia)
+and report pass/fail per query. Connection comes from env (source env.sh first):
+
+    CRATEDB_HOST   (default localhost)   CRATEDB_USER
+    CRATEDB_PORT   (default 4200)        CRATEDB_PASSWORD
+    CRATEDB_SCHEME (default http)
+
+Usage:  python verify_rtia_queries.py
+"""
+import base64
+import json
+import os
+import re
+import sys
+import urllib.request
+
+HOST = os.environ.get("CRATEDB_HOST", "localhost")
+PORT = os.environ.get("CRATEDB_PORT", "4200")
+SCHEME = os.environ.get("CRATEDB_SCHEME", "http")
+USER = os.environ.get("CRATEDB_USER")
+PASSWORD = os.environ.get("CRATEDB_PASSWORD", "")
+URL = f"{SCHEME}://{HOST}:{PORT}/_sql"
+
+FILES = ["sql/rtia_first_queries.sql", "sql/rtia_advanced_queries.sql"]
+
+
+def split_statements(path):
+    """Drop full-line comments / blanks, then split on ';'."""
+    code = []
+    for line in open(path):
+        s = line.strip()
+        if not s or s.startswith("--"):
+            continue
+        code.append(line.rstrip("\n"))
+    text = "\n".join(code)
+    return [st.strip() for st in text.split(";") if st.strip()]
+
+
+def run(stmt):
+    body = json.dumps({"stmt": stmt}).encode()
+    req = urllib.request.Request(URL, data=body, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Default-Schema", "rtia")
+    if USER:
+        token = base64.b64encode(f"{USER}:{PASSWORD}".encode()).decode()
+        req.add_header("Authorization", f"Basic {token}")
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        return json.load(resp)
+
+
+def main():
+    print(f"Target: {URL}  (schema=rtia, user={USER or '(none)'})\n")
+    total = passed = 0
+    failures = []
+    for path in FILES:
+        stmts = split_statements(path)
+        print(f"=== {path}  ({len(stmts)} statements) ===")
+        for i, stmt in enumerate(stmts, 1):
+            first = " ".join(stmt.split())[:70]
+            total += 1
+            try:
+                res = run(stmt)
+                rows = res.get("rowcount", len(res.get("rows", [])))
+                cols = len(res.get("cols", []))
+                print(f"  [{i:2}] PASS  rows={rows:<6} cols={cols:<3} | {first}")
+                passed += 1
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode(errors="replace")
+                try:
+                    detail = json.loads(detail)["error"]["message"]
+                except Exception:
+                    pass
+                print(f"  [{i:2}] FAIL  {first}\n         -> {detail}")
+                failures.append((path, i, first, detail))
+            except Exception as e:  # noqa: BLE001
+                print(f"  [{i:2}] FAIL  {first}\n         -> {e}")
+                failures.append((path, i, first, str(e)))
+        print()
+    print(f"RESULT: {passed}/{total} statements ran OK")
+    if failures:
+        print("\nFailures:")
+        for path, i, first, detail in failures:
+            print(f"  - {path} #{i}: {first}\n      {detail}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
