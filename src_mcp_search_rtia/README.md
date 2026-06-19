@@ -38,10 +38,11 @@ must be running for them to work (see [Run the inference service](#run-the-infer
 
 ## Install
 
-Optionally, create and activate a virtual environment first to keep the
+If needed, create and activate a virtual environment first to keep the
 dependencies isolated:
 
 ```bash
+cd src_mcp_search_rtia
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 ```
@@ -54,8 +55,8 @@ pip install -r requirements.txt
 
 ## Connection
 
-Defaults to a local cluster `crate@localhost:4200` and inference service
-`http://localhost:8000`, so it runs with no arguments. Override with CLI flags
+Defaults to a local CrateDB cluster `crate@localhost:4200` and inference service
+`http://localhost:8000`, so it will run with no arguments. Override with CLI flags
 or the matching environment variables — flags win.
 
 | Flag | Env var | Default |
@@ -82,6 +83,11 @@ uvicorn realtime_inference:app --reload --port 8000
 ```
 
 `query_sql` works without it; only the four inference tools need it.
+
+> **Note:** `CRATEDB_URL` here belongs to the `src_ml` inference service — a
+> separate program that connects via SQLAlchemy (`crate://…`). It is **not** the
+> same as the MCP server's own `CRATEDB_CLUSTER_URL` in the [Connection](#connection)
+> table above, which points at CrateDB's HTTP `_sql` endpoint.
 
 ## Try it with the MCP Inspector
 
