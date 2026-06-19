@@ -105,21 +105,26 @@ Now return to your original window..
 
 ## Try it with the MCP Inspector
 
-The `mcp` dev CLI launches the server with a web Inspector so you can call the
-tools by hand:
+The `mcp` dev CLI launches the server with the web-based
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector)
+([docs](https://modelcontextprotocol.io/docs/tools/inspector)) so you can call
+the tools by hand:
 
 ```bash
 mcp dev rtia_mcp.py
 ```
 
-> **Requires Node.js.** The Inspector is a Node app, so `mcp dev` shells out to
-> `npx`; without it you'll see `npx not found`. Install Node first (e.g.
-> `brew install node`), or skip the Inspector and register the server with a
-> client (below) instead. Remember to `source ../env.sh` first so it connects to
-> your cluster.
+> **Requires [Node.js](https://nodejs.org/).** The Inspector is a Node app, so
+> `mcp dev` shells out to `npx`; without it you'll see `npx not found`. Install
+> Node first (e.g. `brew install node`), or skip the Inspector and register the
+> server with a client (below) instead. Remember to `source ../env.sh` first so
+> it connects to your cluster.
 
-Call `query_sql` with `SELECT 1` to confirm connectivity, then try a real query
-such as `SELECT device_id, device_type, plant_id FROM devices ORDER BY 1 LIMIT 5`.
+`mcp dev` prints a URL like `http://localhost:6274` and opens it in your
+browser. In the Inspector: click **Connect** (left panel), open the **Tools**
+tab, then **List Tools** — the tools don't auto-populate. Call `query_sql` with
+`SELECT 1` to confirm connectivity, then try a real query such as
+`SELECT device_id, device_type, plant_id FROM devices ORDER BY 1 LIMIT 5`.
 
 ## Register with an MCP client
 
