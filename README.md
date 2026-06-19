@@ -11,6 +11,18 @@ The load generators in this repository let you drive that same dataset with a co
 
 The repository also contains a second, self-contained scenario — **[Real Time Industrial Analytics (RTIA)](#real-time-industrial-analytics-rtia)** — a SQL-and-dashboard walkthrough over a fictional fleet of German factories (plants, devices, maintenance logs, and live sensor readings in the `rtia` schema). It reuses the same CrateDB techniques — geo containment, full-text `MATCH`, and vector `KNN_MATCH` — against industrial data instead of weather. Everything from here down to the Grafana dashboard covers the **weather** demo; RTIA has its own section near the end.
 
+## Environment variables
+
+Every module reads its configuration — CrateDB connection, OpenAI key, Kafka brokers, and so on — from environment variables. [`env.example.sh`](env.example.sh) is a template with **every** variable the repo uses, each set to a mock/local-default value. Copy it, fill in your cluster's details, and `source` it before running any example:
+
+```bash
+cp env.example.sh env.sh   # env.sh is gitignored — safe for real credentials
+# edit env.sh for your cluster
+source env.sh
+```
+
+Each module consumes only the variables it needs, so one sourced file covers the load generators, the KNN CLI, the MCP servers, `src_ml`, and the stream-load and Telegraf scenarios. The per-module READMEs document their own variables in detail.
+
 ## Weather Load Generators
 
 | Language                                       | Directory                  | Driver                               |

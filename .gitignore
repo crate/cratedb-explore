@@ -5,6 +5,9 @@
 # Claude Code (per-user overrides — keep out of the shared repo)
 .claude/settings.local.json
 
+# Filled-in env var script with real credentials (copy of env.example.sh)
+env.sh
+
 # Per-run latency chart output (canonical screenshots live in doc/)
 src_weather/main/*/latency_histogram.png
 

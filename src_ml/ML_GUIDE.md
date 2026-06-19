@@ -359,6 +359,11 @@ the `CRATEDB_USER` / `CRATEDB_PASSWORD` environment variables, so passwords neve
 land in your shell history or `ps` output. The local JSON file stays the default
 — the CrateDB URL is purely additive.
 
+The repo-level [`env.example.sh`](../env.example.sh) already defines
+`CRATEDB_ALCHEMY_URL`, `CRATEDB_USER`, and `CRATEDB_PASSWORD` (plus every other
+variable the repo uses); copy it to `env.sh`, edit it, and `source env.sh`
+instead of exporting each variable by hand.
+
 **CrateDB local / Docker:**
 
 ```bash
@@ -617,10 +622,10 @@ Point `CRATEDB_ALCHEMY_URL` at your cluster (host only) and supply credentials v
 into the connection, so passwords never appear in the URL or process list:
 
 ```bash
-# Local / Docker (no auth)
-export CRATEDB_ALCHEMY_URL='crate://localhost:4200'
+# Local / Docker (no auth): the repo template already sets these defaults
+source ../env.sh                     # copied from ../env.example.sh
 
-# CrateDB Cloud
+# CrateDB Cloud: override in your env.sh, or export directly
 export CRATEDB_USER=admin CRATEDB_PASSWORD='<password>'
 export CRATEDB_ALCHEMY_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
 ```

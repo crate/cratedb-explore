@@ -78,7 +78,7 @@ separate window first — see `../src_ml/ML_GUIDE.md` for the full walkthrough:
 ```bash
 cd ../src_ml
 source .venv/bin/activate
-export CRATEDB_ALCHEMY_URL='crate://localhost:4200'      # CrateDB Cloud: add user/pw env + ?ssl=true
+source ../env.sh      # CRATEDB_ALCHEMY_URL + credentials (see ../env.example.sh)
 uvicorn realtime_inference:app --reload --port 8000
 ```
 
