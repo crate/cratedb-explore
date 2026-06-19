@@ -354,7 +354,7 @@ pip install -r requirements.txt
 the official `crate` client); [`sqlalchemy`](https://www.sqlalchemy.org/) itself backs `pandas.read_sql()`.
 
 Both `train_model.py` and `predict.py` build the engine for you: pass the host
-with `--cratedb-url` (or the `CRATEDB_URL` env var) and supply credentials via
+with `--cratedb-url` (or the `CRATEDB_ALCHEMY_URL` env var) and supply credentials via
 the `CRATEDB_USER` / `CRATEDB_PASSWORD` environment variables, so passwords never
 land in your shell history or `ps` output. The local JSON file stays the default
 — the CrateDB URL is purely additive.
@@ -370,8 +370,8 @@ python predict.py     --cratedb-url crate://localhost:4200
 
 ```bash
 export CRATEDB_USER=admin CRATEDB_PASSWORD='<password>'
-export CRATEDB_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
-python train_model.py        # picks up CRATEDB_URL automatically
+export CRATEDB_ALCHEMY_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
+python train_model.py        # picks up CRATEDB_ALCHEMY_URL automatically
 ```
 
 `--days N` (training) limits the pull to the last *N* days **relative to now**
@@ -612,17 +612,17 @@ This is why CrateDB is required at inference time, not just training time. The f
 
 Open a new window or session.
 
-Point `CRATEDB_URL` at your cluster (host only) and supply credentials via the
+Point `CRATEDB_ALCHEMY_URL` at your cluster (host only) and supply credentials via the
 `CRATEDB_USER` / `CRATEDB_PASSWORD` environment variables — the service injects them
 into the connection, so passwords never appear in the URL or process list:
 
 ```bash
 # Local / Docker (no auth)
-export CRATEDB_URL='crate://localhost:4200'
+export CRATEDB_ALCHEMY_URL='crate://localhost:4200'
 
 # CrateDB Cloud
 export CRATEDB_USER=admin CRATEDB_PASSWORD='<password>'
-export CRATEDB_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
+export CRATEDB_ALCHEMY_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
 ```
 
 Make sure you have installed the dependencies (`requirements.txt` already 

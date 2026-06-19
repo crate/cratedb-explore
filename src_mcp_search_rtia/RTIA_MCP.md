@@ -322,7 +322,7 @@ it in a separate window first (full walkthrough in `../src_ml/ML_GUIDE.md`):
 ```bash
 cd ../src_ml
 source .venv/bin/activate
-export CRATEDB_URL='crate://localhost:4200'      # CrateDB Cloud: add user/pw env + ?ssl=true
+export CRATEDB_ALCHEMY_URL='crate://localhost:4200'      # CrateDB Cloud: add user/pw env + ?ssl=true
 uvicorn realtime_inference:app --reload --port 8000
 ```
 

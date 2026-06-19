@@ -13,7 +13,7 @@ recent window per device — the actionable "what happens next" row.
 
 Connection (same convention as the other scripts)
   CRATEDB_USER / CRATEDB_PASSWORD   credentials (kept out of argv)
-  --cratedb-url / CRATEDB_URL   host, e.g. crate://localhost:4200
+  --cratedb-url / CRATEDB_ALCHEMY_URL   host, e.g. crate://localhost:4200
 
 Usage
   export CRATEDB_USER=... CRATEDB_PASSWORD=...
@@ -120,9 +120,9 @@ if __name__ == '__main__':
         description='Score CrateDB window aggregates with the model from '
                     'train_aggregated.py (Scenario 2).')
     parser.add_argument(
-        '--cratedb-url', default=os.getenv('CRATEDB_URL'),
+        '--cratedb-url', default=os.getenv('CRATEDB_ALCHEMY_URL'),
         help='CrateDB host, e.g. crate://localhost:4200 (credentials via '
-             'CRATEDB_USER / CRATEDB_PASSWORD env). Env: CRATEDB_URL')
+             'CRATEDB_USER / CRATEDB_PASSWORD env). Env: CRATEDB_ALCHEMY_URL')
     parser.add_argument(
         '--window', default=None,
         help="Aggregation window as a CrateDB INTERVAL. Default: the window the "
@@ -138,7 +138,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not args.cratedb_url:
-        parser.error('a CrateDB URL is required — pass --cratedb-url or set CRATEDB_URL '
+        parser.error('a CrateDB URL is required — pass --cratedb-url or set CRATEDB_ALCHEMY_URL '
                      '(this script has no file-based mode).')
 
     main(args.cratedb_url, args.window, args.days, args.device, args.latest)

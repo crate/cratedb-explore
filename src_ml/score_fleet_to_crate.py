@@ -16,7 +16,7 @@ created with CREATE TABLE IF NOT EXISTS, then appended to — never replaced.
 
 Connection (same convention as the other scripts)
   CRATEDB_USER / CRATEDB_PASSWORD   credentials (kept out of argv)
-  --cratedb-url / CRATEDB_URL   host, e.g. crate://localhost:4200
+  --cratedb-url / CRATEDB_ALCHEMY_URL   host, e.g. crate://localhost:4200
 
 Usage
   export CRATEDB_USER=... CRATEDB_PASSWORD=...
@@ -152,10 +152,10 @@ if __name__ == '__main__':
         description='Live batch scoring of the fleet, writing predictions back '
                     'to CrateDB (Scenario 3).')
     parser.add_argument(
-        '--cratedb-url', default=os.getenv('CRATEDB_URL'),
+        '--cratedb-url', default=os.getenv('CRATEDB_ALCHEMY_URL'),
         help='CrateDB host, e.g. crate://localhost:4200 (credentials via '
              'CRATEDB_USER / CRATEDB_PASSWORD env). Required — predictions are '
-             'always written here. Env: CRATEDB_URL')
+             'always written here. Env: CRATEDB_ALCHEMY_URL')
     parser.add_argument(
         '--input', default=None,
         help='Read readings from this local NDJSON file instead of CrateDB. '
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not args.cratedb_url:
-        parser.error('a CrateDB URL is required — pass --cratedb-url or set CRATEDB_URL '
+        parser.error('a CrateDB URL is required — pass --cratedb-url or set CRATEDB_ALCHEMY_URL '
                      '(predictions are always written to CrateDB).')
 
     main(args.cratedb_url, args.input, args.device, args.table)

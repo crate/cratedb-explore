@@ -57,7 +57,7 @@ from data_source import connection_error, make_engine
 warnings.filterwarnings('ignore')
 
 # ── Config ────────────────────────────────────────────────────────────────────
-CRATEDB_URL    = os.getenv('CRATEDB_URL', 'crate://localhost:4200')
+CRATEDB_ALCHEMY_URL    = os.getenv('CRATEDB_ALCHEMY_URL', 'crate://localhost:4200')
 MODEL_DIR      = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'model')
 CONTEXT_ROWS   = 50    # readings fetched per device for rolling-feature context
 WINDOWS        = [5, 10, 20]
@@ -91,8 +91,8 @@ async def lifespan(app: FastAPI):
     print(f'  Classifier:  {_clf["model_name"]}  (ROC-AUC {_clf["roc_auc"]})')
     print(f'  Anomaly:     {_iso["model_name"]}')
 
-    print(f'Connecting to CrateDB at {CRATEDB_URL} ...')
-    _engine = make_engine(CRATEDB_URL)
+    print(f'Connecting to CrateDB at {CRATEDB_ALCHEMY_URL} ...')
+    _engine = make_engine(CRATEDB_ALCHEMY_URL)
     try:
         with _engine.connect() as conn:
             conn.execute(text('SELECT 1'))
@@ -322,7 +322,7 @@ def health():
         'trained_at':   _clf['trained_at'],
         'roc_auc':      _clf['roc_auc'],
         'horizon':      f'{_clf["horizon"]} readings',
-        'cratedb':      CRATEDB_URL,
+        'cratedb':      CRATEDB_ALCHEMY_URL,
     }
 
 

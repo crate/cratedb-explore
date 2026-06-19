@@ -19,7 +19,7 @@ aggregates. This mirrors train_model.py's "fault within the next N readings".
 Connection (same convention as train_model.py / predict.py)
 -----------------------------------------------------------
   CRATEDB_USER / CRATEDB_PASSWORD   credentials (kept out of argv)
-  --cratedb-url / CRATEDB_URL   host, e.g. crate://localhost:4200
+  --cratedb-url / CRATEDB_ALCHEMY_URL   host, e.g. crate://localhost:4200
 
 Usage
 -----
@@ -181,9 +181,9 @@ if __name__ == '__main__':
         description='Train a predictive-maintenance model on CrateDB-side '
                     'window aggregates (Scenario 2).')
     parser.add_argument(
-        '--cratedb-url', default=os.getenv('CRATEDB_URL'), required=False,
+        '--cratedb-url', default=os.getenv('CRATEDB_ALCHEMY_URL'), required=False,
         help='CrateDB host, e.g. crate://localhost:4200 (credentials via '
-             'CRATEDB_USER / CRATEDB_PASSWORD env). Env: CRATEDB_URL')
+             'CRATEDB_USER / CRATEDB_PASSWORD env). Env: CRATEDB_ALCHEMY_URL')
     parser.add_argument(
         '--window', default='1 day',
         help="Aggregation window as a CrateDB INTERVAL, e.g. '1 day', '6 hours'. "
@@ -196,7 +196,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not args.cratedb_url:
-        parser.error('a CrateDB URL is required — pass --cratedb-url or set CRATEDB_URL '
+        parser.error('a CrateDB URL is required — pass --cratedb-url or set CRATEDB_ALCHEMY_URL '
                      '(this script has no file-based mode).')
 
     main(args.cratedb_url, args.window, args.days)

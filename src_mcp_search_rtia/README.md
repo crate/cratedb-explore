@@ -78,16 +78,11 @@ separate window first — see `../src_ml/ML_GUIDE.md` for the full walkthrough:
 ```bash
 cd ../src_ml
 source .venv/bin/activate
-export CRATEDB_URL='crate://localhost:4200'      # CrateDB Cloud: add user/pw env + ?ssl=true
+export CRATEDB_ALCHEMY_URL='crate://localhost:4200'      # CrateDB Cloud: add user/pw env + ?ssl=true
 uvicorn realtime_inference:app --reload --port 8000
 ```
 
 `query_sql` works without it; only the four inference tools need it.
-
-> **Note:** `CRATEDB_URL` here belongs to the `src_ml` inference service — a
-> separate program that connects via SQLAlchemy (`crate://…`). It is **not** the
-> same as the MCP server's own `CRATEDB_CLUSTER_URL` in the [Connection](#connection)
-> table above, which points at CrateDB's HTTP `_sql` endpoint.
 
 ## Try it with the MCP Inspector
 

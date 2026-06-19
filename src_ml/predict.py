@@ -339,10 +339,10 @@ if __name__ == '__main__':
                         help='Score only this device_id')
     parser.add_argument('--rows',   type=int, default=2000,
                         help='Max rows to score (default: 2000)')
-    parser.add_argument('--cratedb-url', default=os.getenv('CRATEDB_URL'),
+    parser.add_argument('--cratedb-url', default=os.getenv('CRATEDB_ALCHEMY_URL'),
                         help='Score from CrateDB instead of the file, e.g. '
                              'crate://localhost:4200 (credentials via CRATEDB_USER / '
-                             'CRATEDB_PASSWORD env). Env: CRATEDB_URL')
+                             'CRATEDB_PASSWORD env). Env: CRATEDB_ALCHEMY_URL')
     args = parser.parse_args()
 
     if args.cratedb_url and os.path.abspath(args.input) != os.path.abspath(DATA_FILE):
