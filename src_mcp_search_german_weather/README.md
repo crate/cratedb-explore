@@ -20,6 +20,16 @@ resolve under the `demo` schema. It is built on the official MCP Python SDK
 
 ## Install
 
+Optionally, create and activate a virtual environment first to keep the
+dependencies isolated:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+```
+
+Then install the dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```

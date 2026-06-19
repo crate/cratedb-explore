@@ -38,6 +38,16 @@ must be running for them to work (see [Run the inference service](#run-the-infer
 
 ## Install
 
+Optionally, create and activate a virtual environment first to keep the
+dependencies isolated:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+```
+
+Then install the dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
