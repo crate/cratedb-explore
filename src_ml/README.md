@@ -38,7 +38,7 @@ Starting from 500,000 real sensor readings across 500 devices, the [ML guide](ht
 * **Use CrateDB as the data source** — swap the static file for live SQL across three scenarios: scheduled retraining on the last 90 days, pushing rolling-feature aggregation down into CrateDB with [`DATE_BIN`](https://cratedb.com/docs/crate/reference/en/latest/general/builtins/scalar-functions.html#date-bin-interval-timestamp-origin), and live fleet scoring that writes predictions back.
 * **Run a real-time [FastAPI](https://fastapi.tiangolo.com/) inference service** — fetch a device's recent history from CrateDB, build features in memory, score, and persist `fault_probability` back to `rtia.fault_predictions` in under 20 ms per device.
 * **Query predictions alongside live sensor data** — rank the riskiest devices, roll risk up by plant, and join asset metadata, all in plain SQL.
-* **Visualise it in [Grafana](https://grafana.com/)** — an "ML Fault Predictions" panel surfaces the highest-risk devices straight from CrateDB.
+* **Visualise it in [Grafana](https://grafana.com/)** — import [`grafana/rtia.json`](https://github.com/crate/cratedb-explore/blob/main/grafana/rtia.json) (the "Real Time Industrial Analytics Dashboard"), whose "ML Fault Predictions" panel surfaces the highest-risk devices straight from CrateDB.
 
 Clone the repo, point it at your own CrateDB cluster (or a local Docker one), and you can reproduce the entire pipeline in minutes.
 
