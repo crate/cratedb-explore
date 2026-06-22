@@ -50,8 +50,8 @@ default dataset, not a custom `--input` file):
 ```
 ../data/
 ├── iot_demo_dataset.json   ← required (240 MB, 500,000 rows, gitignored)
-├── devices.json            ← not used by the ML models
-└── plants.json             ← not used by the ML models
+├── devices.json            ← not used by the ML models, but needed by Grafana.
+└── plants.json             ← not used by the ML models, but needed by Grafana.
 ```
 
 ---
@@ -105,29 +105,53 @@ Without this correction, a model that predicts "healthy" for every single readin
 ### Expected output
 
 ```
+======================================================================
+CrateDB Industrial IoT - Predictive Maintenance Training Pipeline
+======================================================================
+Importing pandas + scikit-learn (~30s on a cold cache) ...
+iot_demo_dataset.json not found — downloading from S3 ...
+  https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/iot_demo_dataset.json
+  240 / 240 MiB  (100%)
+  downloaded in 46.0s
 Loading iot_demo_dataset.json ...
-  500,000 rows  |  500 devices  |  3.2s
+  501,000 rows  |  500 devices  |  3.5s
 Engineering features ...
 Creating target: fault within next 5 readings ...
-  Rows after trim: 497,500  |  healthy: ~370,000  |  fault_incoming: ~127,000  |  imbalance ratio: ~2.9:1
+  Rows after trim: 498,500  |  healthy: 462,889  |  fault_incoming: 35,611  |  imbalance ratio: 13.0:1
+
 Splitting by device ...
-  Train: ~398,000 rows (400 devices)  |  Test: ~99,500 rows (100 devices)
+  Train: 398,800 rows  (400 devices)  |  Test: 99,700 rows  (100 devices)
+
 Training classifier ...
-  XGBoost  —  trained in ~45s
+  XGBoost  -  trained in 2.5s
 
-── Evaluation ──────────────────────────────────────────────────────
-              precision  recall  f1-score
-healthy            0.92    0.87      0.89
-fault_incoming     0.73    0.82      0.77
+-- Evaluation ------------------------------------------------------
+                precision    recall  f1-score   support
 
-ROC-AUC:  0.91
+       healthy       1.00      1.00      1.00     91906
+fault_incoming       0.97      0.95      0.96      7794
+
+      accuracy                           0.99     99700
+     macro avg       0.99      0.98      0.98     99700
+  weighted avg       0.99      0.99      0.99     99700
+
+ROC-AUC:          0.9800
+Confusion matrix:
+  TN=91,707  FP=199
+  FN=351  TP=7,443
 
 Top 10 features:
-              feature  importance
-         fault_rate_5    0.182
-        fault_rate_10    0.141
-    quality_mean_5        0.098
-       metric_std_10    0.087
+        feature  importance
+   fault_rate_5    0.594376
+  fault_rate_10    0.342130
+  fault_rate_20    0.017046
+device_type_enc    0.004992
+   metric_value    0.004618
+ metric_mean_10    0.003477
+  quality_score    0.003130
+ metric_mean_20    0.002975
+       fw_major    0.002913
+    day_of_week    0.002879
 ...
 
 Training anomaly detector (Isolation Forest) ...
