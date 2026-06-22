@@ -39,7 +39,7 @@ pip install -r requirements.txt
 
 `xgboost` is optional but strongly recommended. Without it the training script falls back to scikit-learn's `GradientBoostingClassifier`, which produces the same result but trains roughly 3–5× slower.
 
-### Dataset
+### Local Dataset
 
 Both `train_model.py` and `predict.py` read directly from the shared
 `../data/iot_demo_dataset.json` — the same dataset the COPY FROM and Telegraf
@@ -55,6 +55,12 @@ default dataset, not a custom `--input` file):
 ```
 
 ---
+
+### CrateDB hosted Dataset
+
+Once we've established the basics of running a model on static data, we'll be moving on to running against 
+a database with up-to-date data in it. For this part to work, you'll need to have run [rtia_schema_create.sql](../sql/rtia_schema_create.sql)
+against a copy of CrateDB. You may already have one. If not, see [here](https://cratedb.com/database/editions/cloud).
 
 ## Step 1 — Train the models
 
