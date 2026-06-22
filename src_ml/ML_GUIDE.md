@@ -350,7 +350,7 @@ Swapping the file read for a SQL query against CrateDB removes that problem enti
 ### Setup
 
 Install the dependencies (the CrateDB tier is already listed in
-`requirements.txt`:
+`requirements.txt`):
 
 ```bash
 pip install -r requirements.txt
