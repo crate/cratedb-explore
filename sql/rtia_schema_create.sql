@@ -194,3 +194,8 @@ CREATE TABLE IF NOT EXISTS rtia.fault_predictions (
     anomaly_score     DOUBLE PRECISION,
     PRIMARY KEY (device_id, scored_at)
 );
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- Once this schema is loaded, import grafana/rtia.json (the "Real Time Industrial
+-- Analytics Dashboard") to visualise it: add a PostgreSQL datasource pointing at
+-- your CrateDB cluster, then Dashboards > Import. See README.md for details.

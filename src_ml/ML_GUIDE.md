@@ -772,3 +772,11 @@ src_ml/
 
 ../data/iot_demo_dataset.json   ← shared input dataset (gitignored)
 ```
+
+## Visualizing in Grafana
+
+The predictions this pipeline writes to `rtia.fault_predictions` — alongside the
+rest of the `rtia` schema — are visualised by `grafana/rtia.json`, the **"Real
+Time Industrial Analytics Dashboard"**. Import it by adding a PostgreSQL
+datasource pointing at your CrateDB cluster, then **Dashboards > Import**. See
+`README.md` for details.
