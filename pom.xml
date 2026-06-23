@@ -16,7 +16,7 @@
     </properties>
 
     <modules>
-        <module>src_weather/main/java</module>
-        <module>src_knn_search/main/java</module>
+        <module>sda/src/src_weather/main/java</module>
+        <module>sda/src/src_knn_search/main/java</module>
     </modules>
 </project>

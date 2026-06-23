@@ -19,8 +19,8 @@
 # with Crate these terms will supersede the license and you may use the
 # software solely pursuant to the terms of the relevant commercial agreement.
 
-"""Run every statement in sql/rtia_first_queries.sql and
-sql/rtia_advanced_queries.sql against CrateDB's HTTP _sql endpoint (schema rtia)
+"""Run every statement in rtia/sql/rtia_first_queries.sql and
+rtia/sql/rtia_advanced_queries.sql against CrateDB's HTTP _sql endpoint (schema rtia)
 and report pass/fail per query. Connection comes from env (source env.sh first):
 
     CRATEDB_HOST   (default localhost)   CRATEDB_USER
@@ -43,7 +43,7 @@ USER = os.environ.get("CRATEDB_USER")
 PASSWORD = os.environ.get("CRATEDB_PASSWORD", "")
 URL = f"{SCHEME}://{HOST}:{PORT}/_sql"
 
-FILES = ["sql/rtia_first_queries.sql", "sql/rtia_advanced_queries.sql"]
+FILES = ["rtia/sql/rtia_first_queries.sql", "rtia/sql/rtia_advanced_queries.sql"]
 
 
 def split_statements(path):

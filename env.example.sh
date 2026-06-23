@@ -21,22 +21,22 @@ export CRATEDB_USER="${CRATEDB_USER:-crate}"
 export CRATEDB_PASSWORD="${CRATEDB_PASSWORD:-}"   # a local single-node CrateDB has no password
 export CRATEDB_SCHEME="${CRATEDB_SCHEME:-http}"   # use https for CrateDB Cloud
 
-# KNN search CLI (src_knn_search) extras.
+# KNN search CLI (sda/src/src_knn_search) extras.
 export CRATEDB_DB="${CRATEDB_DB:-demo}"
 export CRATEDB_FULLTEXT_COLUMNS="${CRATEDB_FULLTEXT_COLUMNS:-tourism_info,transportation,economics,introduced_species}"
 # Only the semantic (embedding) mode needs a key; fulltext mode runs without one.
 export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-REPLACE_ME}"
 export OPENAI_EMBED_MODEL="${OPENAI_EMBED_MODEL:-text-embedding-3-small}"
 
-# Kafka stream load (src_stream_load).
+# Kafka stream load (sda/src/src_stream_load).
 export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
 export SCHEMA_REGISTRY_URL="${SCHEMA_REGISTRY_URL:-http://localhost:8081}"
 export KAFKA_GROUP_ID="${KAFKA_GROUP_ID:-crate-loader}"
 
-# Telegraf replay (src_telegraf).
+# Telegraf replay (rtia/src/src_telegraf).
 export TELEGRAF_URL="${TELEGRAF_URL:-http://localhost:8186/telegraf}"
 
-# rtia MCP server: base URL of the src_ml inference service it proxies.
+# rtia MCP server: base URL of the rtia/src/src_ml inference service it proxies.
 export INFERENCE_URL="${INFERENCE_URL:-http://localhost:8000}"
 
 # ─── DERIVED — don't edit ────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ export INFERENCE_URL="${INFERENCE_URL:-http://localhost:8000}"
 #
 #   CRATEDB_CLUSTER_URL  MCP servers   — HTTP _sql endpoint  (port 4200)
 #   CRATEDB_URL          stream_load   — HTTP endpoint        (port 4200)
-#   CRATEDB_ALCHEMY_URL  src_ml        — SQLAlchemy crate://  (port 4200)
+#   CRATEDB_ALCHEMY_URL  rtia/src/src_ml        — SQLAlchemy crate://  (port 4200)
 #   CRATEDB_PORT         knn CLI       — PostgreSQL wire      (port 5432)
 #
 # Setting CRATEDB_CLUSTER_URL makes the MCP servers ignore CRATEDB_PORT (5432),
