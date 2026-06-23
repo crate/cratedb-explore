@@ -334,18 +334,6 @@ Selecting columns with `X[clf['features']]` / `X[iso['features']]` guarantees ea
 
 ---
 
-## Retraining on new data
-
-To retrain on a fresh dataset:
-
-1. Replace `../data/iot_demo_dataset.json` with the new file (same schema)
-2. Run `python train_model.py`
-3. The new `.pkl` files overwrite the old ones in `model/`
-
-No code changes needed as long as the field names in the JSON match what the script expects: `device_id`, `device_type`, `plant_id`, `timestamp`, `metric_value`, `quality_score`, `status`, `metadata`.
-
----
-
 ## Using CrateDB as the data source
 
 The default scripts read from a local JSON file. That works for a one-time demo or offline development. The moment the dataset grows — new readings every minute, new devices added, data spanning months — the file goes stale the instant you export it, and re-exporting before every training run becomes a manual step that will eventually be skipped or forgotten.
