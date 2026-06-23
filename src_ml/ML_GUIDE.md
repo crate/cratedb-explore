@@ -1,6 +1,6 @@
 # Running the ML Models — Predictive Maintenance & Anomaly Detection
 
-You have 500,000 sensor readings across 500 devices and three health profiles baked into the data: gradual degraders, occasional faulters, and devices that are reliably healthy. The dataset is clean, but realistic — fault classes are imbalanced, readings arrive at device-level frequencies, and the strongest signals are historical context, not point-in-time values.
+You have 501,000 sensor readings across 500 devices and three health profiles baked into the data: gradual degraders, occasional faulters, and devices that are reliably healthy. The dataset is clean, but realistic — fault classes are imbalanced, readings arrive at device-level frequencies, and the strongest signals are historical context, not point-in-time values.
 
 This guide walks through building two models from that data, understanding what they actually learned, and then moving from batch training to a live inference service — every stage reading its data straight from CrateDB.
 
@@ -152,12 +152,11 @@ Without this correction, a model that predicts "healthy" for every single readin
 ### Expected output
 
 ```
-======================================================================
-CrateDB Industrial IoT - Predictive Maintenance Training Pipeline
-======================================================================
 Importing pandas + scikit-learn (~30s on a cold cache) ...
-Querying CrateDB at crate://localhost:4200 (last 90 days of the newest reading) ...
-  501,000 rows  |  500 devices  |  4.1s
+  [unusual default] no --days given: pulling the last 90 days relative to the LATEST reading in the DB, not wall-clock now (WHERE "timestamp" >= (SELECT MAX("timestamp") ...) - INTERVAL 90 DAY).
+  (pass --days N for a NOW()-relative window, or --days 0 for all history.)
+Querying CrateDB at crate://endowment:4200/?ssl=false (latest 90 days) ...
+  501,000 rows  |  500 devices loaded from CrateDB
 Engineering features ...
 Creating target: fault within next 5 readings ...
   Rows after trim: 498,500  |  healthy: 462,889  |  fault_incoming: 35,611  |  imbalance ratio: 13.0:1
@@ -166,7 +165,7 @@ Splitting by device ...
   Train: 398,800 rows  (400 devices)  |  Test: 99,700 rows  (100 devices)
 
 Training classifier ...
-  XGBoost  -  trained in 2.5s
+  XGBoost  -  trained in 2.1s
 
 -- Evaluation ------------------------------------------------------
                 precision    recall  f1-score   support
@@ -204,7 +203,7 @@ Model saved  → model/predictive_maintenance_model.pkl
 Anomaly detector saved → model/anomaly_detector_model.pkl
 ```
 
-**ROC-AUC of ~0.91** means the classifier separates healthy from fault-incoming devices well. The recall on `fault_incoming` (~0.82) is more important than precision here — missing a real fault is more costly than a false alarm.
+**ROC-AUC of ~0.98** means the classifier separates healthy from fault-incoming devices very well — given a random fault-incoming and a random healthy reading, it scores the faulty one higher ~98% of the time. The recall on `fault_incoming` (~0.95) is more important than precision here — missing a real fault is more costly than a false alarm.
 
 ### Outputs written to `model/`
 
@@ -391,7 +390,14 @@ Because `train_model.py` reads straight from `rtia.iot_data`, retraining on fres
 
 Rolling statistics over 500,000 rows in pandas requires loading every raw reading into memory. CrateDB can pre-compute `DATE_BIN` windows, fault rates, and averages in the database, then hand a compact feature table to pandas. This is substantially faster and uses a fraction of the RAM.
 
-This is implemented as a standalone script, `train_aggregated.py` (it changes the feature schema, so it's separate from `train_model.py`'s `--cratedb-url` path rather than folded into it):
+This track has its own feature schema, so it lives in two dedicated scripts rather than being folded into `train_model.py`'s `--cratedb-url` path. They mirror the `train_model.py` → `predict.py` split exactly:
+
+| Script | Role | Reads | Writes |
+|---|---|---|---|
+| `train_aggregated.py` | **Trains** a model on the windowed features. Run this **first**, and again whenever you retrain. | `rtia.iot_data` (aggregated in CrateDB) | `model/aggregated_maintenance_model.pkl` |
+| `predict_aggregated.py` | **Scores** fresh windows with the model `train_aggregated.py` saved. Run it **after** training. | `rtia.iot_data` + the saved `.pkl` | `model/aggregated_scored.csv` |
+
+So `predict_aggregated.py` **requires** the model file — running it first fails with `aggregated_maintenance_model.pkl not found — run: python train_aggregated.py`. The model is the only thing passed between them; both run the same DB-side aggregation query (`data_source.load_aggregated_frame`).
 
 ```bash
 export CRATEDB_USER=... CRATEDB_PASSWORD=...
@@ -400,7 +406,7 @@ python train_aggregated.py   --cratedb-url crate://localhost:4200 --window '6 ho
 python predict_aggregated.py --cratedb-url crate://localhost:4200 --latest # score each device's next window
 ```
 
-`predict_aggregated.py` reuses the same DB-side aggregation, scores each window with the saved model (defaulting to the window the model was trained on), and writes `model/aggregated_scored.csv`; `--latest` keeps only the most recent window per device. The query both scripts run (in `data_source.load_aggregated_frame`):
+`predict_aggregated.py` defaults to the window the model was trained on, and `--latest` keeps only the most recent window per device. The shared query:
 
 ```sql
 SELECT
