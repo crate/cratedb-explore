@@ -2,16 +2,16 @@
 
 You have 500,000 sensor readings across 500 devices and three health profiles baked into the data: gradual degraders, occasional faulters, and devices that are reliably healthy. The dataset is clean, but realistic — fault classes are imbalanced, readings arrive at device-level frequencies, and the strongest signals are historical context, not point-in-time values.
 
-This guide walks through building two models from that dataset, understanding what they actually learned, and then moving from offline scripts to a live inference service backed by CrateDB.
+This guide walks through building two models from that data, understanding what they actually learned, and then moving from batch training to a live inference service — every stage reading its data straight from CrateDB.
 
 By the end you will have:
 
 - **A trained fault classifier** — XGBoost, trained on per-device rolling windows (5, 10, 20 readings), split by `device_id` to prevent leakage, with class-imbalance correction. Outputs `fault_probability` for the next 5 readings.
 - **A trained anomaly detector** — Isolation Forest fit on normal readings only. Scores any reading on how far it deviates from the healthy-fleet baseline, independent of whether a fault label was ever assigned.
 - **Two ways to score** — a batch script (`predict.py`) for offline or scheduled use, and a [FastAPI](https://fastapi.tiangolo.com/) service (`realtime_inference.py`) that fetches rolling context from CrateDB per request and writes predictions back.
-- **An understanding of when CrateDB replaces the JSON file** — for recurring retraining, large-scale feature pre-aggregation, and live scoring where historical context cannot be shipped as a file.
+- **A pipeline rooted in CrateDB** — training, scoring, and inference all read their data from the `rtia` schema, so the model always reflects the current fleet. There is no separate "export a file first" step.
 
-The three scenarios in the "Using CrateDB as the data source" section are the practical bridge between a working demo and a production pipeline.
+The "Advanced CrateDB patterns" section near the end (feature pre-aggregation, live batch scoring) is the bridge from this working demo to a production pipeline.
 
 ---
 
@@ -39,40 +39,87 @@ pip install -r requirements.txt
 
 `xgboost` is optional but strongly recommended. Without it the training script falls back to scikit-learn's `GradientBoostingClassifier`, which produces the same result but trains roughly 3–5× slower.
 
-### Local Dataset
+### CrateDB with the `rtia` schema (required)
 
-Both `train_model.py` and `predict.py` read directly from the shared
-`../data/iot_demo_dataset.json` — the same dataset the COPY FROM and Telegraf
-demos use. It is gitignored and auto-downloaded from S3 on first use by
-whichever script runs first (`predict.py` only auto-downloads when scoring the
-default dataset, not a custom `--input` file):
+Every script in this guide reads its data from CrateDB — there is no local-file
+training path. Before going further you need a CrateDB cluster with the `rtia`
+schema **created and populated**. Running
+[`rtia_schema_create.sql`](../sql/rtia_schema_create.sql) does both in one step:
+it creates the tables and `COPY`s the demo data straight from S3, including the
+500,000 `rtia.iot_data` readings the models train on (plus `plants`, `devices`,
+and `maintenance_log`). Run it however you run SQL against your cluster — the
+CrateDB Admin UI console, `crash`, or any PostgreSQL client. You may already
+have a cluster; if not, spin one up on
+[CrateDB Cloud](https://cratedb.com/database/editions/cloud).
 
+### CrateDB connection
+
+`sqlalchemy-cratedb` (already in `requirements.txt`) registers the `crate://`
+SQLAlchemy dialect that every script connects through; [`sqlalchemy`](https://www.sqlalchemy.org/)
+itself backs `pandas.read_sql()`.
+
+Pass the cluster with `--cratedb-url` (or the `CRATEDB_ALCHEMY_URL` env var) and
+supply credentials via the `CRATEDB_USER` / `CRATEDB_PASSWORD` environment
+variables, so passwords never land in your shell history or `ps` output. The
+repo-level [`env.example.sh`](../env.example.sh) already defines all three (plus
+every other variable the repo uses); copy it to `env.sh`, edit it, and
+`source env.sh` instead of exporting each by hand.
+
+**CrateDB local / Docker:**
+
+```bash
+export CRATEDB_ALCHEMY_URL='crate://localhost:4200'
 ```
-../data/
-├── iot_demo_dataset.json   ← required (240 MB, 500,000 rows, gitignored)
-├── devices.json            ← not used by the ML models, but needed by Grafana.
-└── plants.json             ← not used by the ML models, but needed by Grafana.
+
+**CrateDB Cloud:**
+
+```bash
+export CRATEDB_USER=admin CRATEDB_PASSWORD='<password>'
+export CRATEDB_ALCHEMY_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
 ```
 
----
-
-### CrateDB hosted Dataset
-
-Once we've established the basics of running a model on static data, we'll be moving on to running against 
-a database with up-to-date data in it. For this part to work, you'll need to have run [rtia_schema_create.sql](../sql/rtia_schema_create.sql)
-against a copy of CrateDB. You may already have one. If not, see [here](https://cratedb.com/database/editions/cloud).
+> The raw dataset also exists as `../data/iot_demo_dataset.json` (240 MB,
+> gitignored, auto-downloaded from S3), and `predict.py` /
+> `score_fleet_to_crate.py` still accept it via `--input` as a fallback — but
+> training and the default scoring path read from CrateDB. `devices.json` /
+> `plants.json` are not used by the models; the same schema script loads them
+> into CrateDB for Grafana.
 
 ## Step 1 — Train the models
 
 ```bash
-python train_model.py
+python train_model.py --cratedb-url "$CRATEDB_ALCHEMY_URL"
 ```
+
+(`train_model.py` also reads `CRATEDB_ALCHEMY_URL` from the environment, so once
+it is exported `python train_model.py` alone is enough.)
 
 ### What happens during training
 
 The script runs in five phases:
 
-**1. Load** — reads all 500,000 rows from `iot_demo_dataset.json` into memory (~4 GB RAM peak during feature engineering).
+**1. Load** — queries `rtia.iot_data` from CrateDB into memory (~4 GB RAM peak during feature engineering). The query (in `data_source.load_training_frame`) pulls recent readings and reshapes Telegraf's `tags{}`/`fields{}` objects back into flat columns:
+
+```sql
+SELECT
+    tags['device_id']                 AS device_id,
+    tags['device_type']               AS device_type,
+    tags['plant_id']                  AS plant_id,
+    "timestamp",
+    fields['metric_value']            AS metric_value,
+    tags['metric_unit']               AS metric_unit,
+    tags['status']                    AS status,
+    fields['quality_score']           AS quality_score,
+    tags['metadata_firmware_version'] AS firmware_version
+FROM rtia.iot_data
+WHERE "timestamp" >= (SELECT MAX("timestamp")            -- default: last 90 days
+                      FROM rtia.iot_data) - INTERVAL '90' DAY   -- of the newest data
+-- with --days N instead:  WHERE "timestamp" >= NOW() - INTERVAL 'N' DAY
+-- with --days 0:          no WHERE clause (all history)
+ORDER BY tags['device_id'], "timestamp"
+```
+
+`--days N` limits the pull to the last *N* days relative to **now** (`--days 0` = all history). With no `--days`, the window is anchored to the latest reading in the DB (`MAX("timestamp") - INTERVAL '90' DAY`) rather than wall-clock now — this avoids a static demo dataset with older-than-90-days timestamps returning nothing. `rtia.iot_data` stores readings in Telegraf's line-protocol shape (strings in `tags`, numbers in `fields`), so CrateDB returns each aliased column flat — nothing to unpack in Python after loading.
 
 **2. Feature engineering** — groups readings by `device_id` and computes rolling statistics for each device independently. Rolling windows look *backward only* (shifted by one reading) so no future data leaks into the features.
 
@@ -109,12 +156,8 @@ Without this correction, a model that predicts "healthy" for every single readin
 CrateDB Industrial IoT - Predictive Maintenance Training Pipeline
 ======================================================================
 Importing pandas + scikit-learn (~30s on a cold cache) ...
-iot_demo_dataset.json not found — downloading from S3 ...
-  https://iot2-601357753311-eu-west-1-an.s3.eu-west-1.amazonaws.com/iot_demo_dataset.json
-  240 / 240 MiB  (100%)
-  downloaded in 46.0s
-Loading iot_demo_dataset.json ...
-  501,000 rows  |  500 devices  |  3.5s
+Querying CrateDB at crate://localhost:4200 (last 90 days of the newest reading) ...
+  501,000 rows  |  500 devices  |  4.1s
 Engineering features ...
 Creating target: fault within next 5 readings ...
   Rows after trim: 498,500  |  healthy: 462,889  |  fault_incoming: 35,611  |  imbalance ratio: 13.0:1
@@ -179,25 +222,25 @@ Anomaly detector saved → model/anomaly_detector_model.pkl
 Training is a one-time operation. Scoring is what you run against new data — on demand, daily, or on a schedule. The script builds the same rolling features used during training, so whatever the model learned during training is applied consistently here. The output is one row per reading with a fault probability and anomaly score attached.
 
 ```bash
-python predict.py
+python predict.py --cratedb-url "$CRATEDB_ALCHEMY_URL"
 ```
 
-By default, this takes the last 50 readings per device from `iot_demo_dataset.json` (50 readings per device provides enough history for rolling features to stabilise), scores them, and writes results to `model/scored_batch.csv`.
+By default this pulls the last 50 readings per device from `rtia.iot_data` (50 readings provides enough history for rolling features to stabilise), scores them, and writes results to `model/scored_batch.csv`.
 
 ### Options
 
 ```bash
-# Score last 50 readings per device (default)
-python predict.py
+# Score the last 50 readings per device from CrateDB (default)
+python predict.py --cratedb-url "$CRATEDB_ALCHEMY_URL"
 
 # Score a single device only
-python predict.py --device DEVICE_0042
+python predict.py --cratedb-url "$CRATEDB_ALCHEMY_URL" --device DEVICE_0042
 
-# Score from a different NDJSON file
+# Fallback: score from a local NDJSON file instead of CrateDB
 python predict.py --input /path/to/new_readings.json
 ```
 
-The input file must be NDJSON (one JSON object per line). Records may be in the
+The `--input` fallback file must be NDJSON (one JSON object per line). Records may be in the
 canonical Telegraf `tags{}`/`fields{}` shape (like the demo dataset) or already
 flat — the loader flattens either. A flat record needs at minimum:
 `device_id`, `device_type`, `timestamp`, `metric_value`, `quality_score`, `status`, `metadata`
@@ -334,114 +377,17 @@ Selecting columns with `X[clf['features']]` / `X[iso['features']]` guarantees ea
 
 ---
 
-## Using CrateDB as the data source
+## Advanced CrateDB patterns
 
-The default scripts read from a local JSON file. That works for a one-time demo or offline development. The moment the dataset grows — new readings every minute, new devices added, data spanning months — the file goes stale the instant you export it, and re-exporting before every training run becomes a manual step that will eventually be skipped or forgotten.
+Training and scoring already read from CrateDB (above). Two further patterns push more of the work into the database for production-scale pipelines.
 
-Swapping the file read for a SQL query against CrateDB removes that problem entirely. The training and scoring logic stays identical; only the data source changes. The three scenarios below cover the most common cases in order of complexity.
+### Scheduled retraining
 
-### When the JSON file is sufficient
-
-- First run on a static dataset
-- Offline model development with no running cluster
-- Sharing a reproducible training artefact (the file is the dataset)
-
-### When to query CrateDB instead
-
-| Scenario | Why CrateDB |
-|---|---|
-| Data keeps growing | New sensor readings arrive continuously; the JSON snapshot goes stale immediately |
-| Scheduled retraining | A cron job retrains weekly on the last 90 days — pulling from a file requires re-exporting first |
-| Selective training | Train a plant-specific model by filtering in SQL, not in pandas |
-| Feature aggregation at scale | Pre-compute rolling averages in CrateDB SQL before loading into pandas — faster and lower memory |
-| Live scoring | Score the latest N readings per device without exporting any file |
-| Write predictions back | Store `fault_probability` in CrateDB so it can be queried alongside raw sensor data |
+Because `train_model.py` reads straight from `rtia.iot_data`, retraining on fresh data is just re-running it on a schedule (weekly, nightly) — there is no file to re-export. With no `--days` it uses the DB-anchored 90-day window described in Step 1; pass `--days N` for a `NOW()`-relative window, or `--days 0` for all history. The model always reflects current fleet behaviour.
 
 ---
 
-### Setup
-
-Install the dependencies (the CrateDB tier is already listed in
-`requirements.txt`):
-
-```bash
-pip install -r requirements.txt
-```
-
-`sqlalchemy-cratedb` registers the `crate://` SQLAlchemy dialect (and pulls in
-the official `crate` client); [`sqlalchemy`](https://www.sqlalchemy.org/) itself backs `pandas.read_sql()`.
-
-Both `train_model.py` and `predict.py` build the engine for you: pass the host
-with `--cratedb-url` (or the `CRATEDB_ALCHEMY_URL` env var) and supply credentials via
-the `CRATEDB_USER` / `CRATEDB_PASSWORD` environment variables, so passwords never
-land in your shell history or `ps` output. The local JSON file stays the default
-— the CrateDB URL is purely additive.
-
-The repo-level [`env.example.sh`](../env.example.sh) already defines
-`CRATEDB_ALCHEMY_URL`, `CRATEDB_USER`, and `CRATEDB_PASSWORD` (plus every other
-variable the repo uses); copy it to `env.sh`, edit it, and `source env.sh`
-instead of exporting each variable by hand.
-
-**CrateDB local / Docker:**
-
-```bash
-python train_model.py --cratedb-url crate://localhost:4200 --days 90
-python predict.py     --cratedb-url crate://localhost:4200
-```
-
-**CrateDB Cloud:**
-
-```bash
-export CRATEDB_USER=admin CRATEDB_PASSWORD='<password>'
-export CRATEDB_ALCHEMY_URL='crate://<your-cluster>.cratedb.net:4200/?ssl=true'
-python train_model.py        # picks up CRATEDB_ALCHEMY_URL automatically
-```
-
-`--days N` (training) limits the pull to the last *N* days **relative to now**
-(`--days 0` = all history). If you omit `--days`, `train_model.py` uses an
-unusual default: the last 90 days relative to the **latest reading in the DB**
-(`MAX("timestamp") - INTERVAL '90' DAY`), not wall-clock now, logged at run
-time. This avoids the trap where a static demo dataset with older-than-90-days
-timestamps makes a `NOW()`-relative window return nothing. `predict.py` pulls
-the last 50 readings per device for rolling context — add `--device
-DEVICE_0001` to score a single device.
-
----
-
-### Scenario 1 — Scheduled retraining on recent data
-
-`train_model.py --cratedb-url crate://localhost:4200 ` pulls the last 90 days straight from CrateDB instead of the file (omit `--days` to use the DB-anchored default described above). Everything downstream (feature engineering, training) stays identical. Under the hood the script runs this query (in `data_source.load_training_frame`):
-
-```sql
-SELECT
-    tags['device_id']                 AS device_id,
-    tags['device_type']               AS device_type,
-    tags['plant_id']                  AS plant_id,
-    "timestamp",
-    fields['metric_value']            AS metric_value,
-    tags['metric_unit']               AS metric_unit,
-    tags['status']                    AS status,
-    fields['quality_score']           AS quality_score,
-    tags['metadata_firmware_version'] AS firmware_version
-FROM rtia.iot_data
-WHERE "timestamp" >= (SELECT MAX("timestamp")            -- default: last 90 days
-                      FROM rtia.iot_data) - INTERVAL '90' DAY   -- of the newest data
--- with --days N instead:  WHERE "timestamp" >= NOW() - INTERVAL 'N' DAY
--- with --days 0:          no WHERE clause (all history)
-ORDER BY tags['device_id'], "timestamp"
-```
-
-`rtia.iot_data` stores the readings in Telegraf's line-protocol shape — strings
-live in the `tags` object, numbers in the `fields` object — so the query reaches
-into them with `tags['…']` / `fields['…']` and aliases each back to the flat
-column name the feature code expects. CrateDB returns each as a plain column, so
-there is no object to unpack in Python after loading.
-
-Run this on a schedule (weekly, nightly) and the model always reflects the current fleet behaviour without any file management.
-
----
-
-### Scenario 2 — Push feature aggregation into CrateDB
+### Push feature aggregation into CrateDB
 
 Rolling statistics over 500,000 rows in pandas requires loading every raw reading into memory. CrateDB can pre-compute `DATE_BIN` windows, fault rates, and averages in the database, then hand a compact feature table to pandas. This is substantially faster and uses a fraction of the RAM.
 
@@ -481,7 +427,7 @@ This pattern scales to hundreds of millions of rows because CrateDB distributes 
 
 ---
 
-### Scenario 3 — Live batch scoring against the current fleet state
+### Live batch scoring against the current fleet state
 
 This is implemented as `score_fleet_to_crate.py`: it pulls the last 50 readings per device, scores them with both models, collapses to one row per device (the current fleet state), and **always writes the predictions back to CrateDB's `rtia.fault_predictions` table**. The input may be CrateDB (default) or a local file (`--input`), but the output always lands in CrateDB:
 
@@ -767,12 +713,12 @@ The service is passive — it scores on demand. Common triggers:
 src_ml/
 ├── ML_GUIDE.md             ← this guide
 ├── requirements.txt        ← Python dependencies
-├── train_model.py          ← training pipeline (run once)
-├── train_aggregated.py     ← Scenario 2: train on CrateDB-side aggregates
-├── predict_aggregated.py   ← Scenario 2: score with the aggregated model
-├── score_fleet_to_crate.py ← Scenario 3: score fleet, write back to CrateDB
-├── predict.py              ← batch scoring (run on new data)
-├── data_source.py          ← optional CrateDB loader (--cratedb-url)
+├── train_model.py          ← training pipeline, reads rtia.iot_data (run once)
+├── train_aggregated.py     ← train on CrateDB-side feature aggregates
+├── predict_aggregated.py   ← score with the aggregated model
+├── score_fleet_to_crate.py ← score fleet, write back to CrateDB
+├── predict.py              ← batch scoring (reads rtia.iot_data)
+├── data_source.py          ← CrateDB loader (--cratedb-url)
 ├── use_models_example.py   ← minimal "use the models" example
 ├── realtime_inference.py   ← FastAPI inference service (optional)
 └── model/                  ← created by train_model.py
@@ -782,7 +728,8 @@ src_ml/
     ├── test_predictions.csv
     └── scored_batch.csv    ← written by predict.py
 
-../data/iot_demo_dataset.json   ← shared input dataset (gitignored)
+../data/iot_demo_dataset.json   ← raw dataset; loaded into CrateDB by
+                                  rtia_schema_create.sql (gitignored; --input fallback)
 ```
 
 ## Visualizing in Grafana
