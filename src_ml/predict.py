@@ -348,20 +348,6 @@ def main(input_file: str, device_filter, n_rows: int, cratedb_url=None):
     pd.set_option('display.width', 120)
     print(top10.to_string(index=False))
 
-    # Early-warning view: readings still reporting 'normal' but with an elevated
-    # fault probability. These are the model's genuine lead-time signal — a fault
-    # is forecast before the status label flips to warning/critical. (The top-20
-    # above is dominated by readings that are *already* warning/critical, where a
-    # high score is near-tautological given fault_rate_5/10 drive the model.)
-    early = out[(out['status'] == 'normal') & (out['fault_probability'] > 0.60)]
-    print(f"\nEarly-warning readings (status 'normal', fault_probability > 0.60): "
-          f'{len(early):,}')
-    if not early.empty:
-        print(early.nlargest(20, 'fault_probability')[
-            ['device_id', 'device_type', 'plant_id', 'timestamp',
-             'status', 'fault_probability', 'anomaly_score']
-        ].to_string(index=False))
-
     print(f'\nScored batch written -> {OUT_FILE}')
 
 
