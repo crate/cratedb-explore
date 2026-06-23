@@ -229,12 +229,30 @@ low       18,432
 medium     4,891
 high       1,677
 
-Top 10 highest fault-probability readings:
+Top 20 highest fault-probability readings:
    device_id device_type    plant_id          timestamp  status  fault_probability  anomaly_score
 DEVICE_0387  vibration_sensor  PLANT_DORTMUND  2025-10-11 22:00  critical  0.974  0.312
 DEVICE_0219  pressure_sensor   PLANT_HAMBURG   2025-10-10 14:00  warning   0.961  0.287
 ...
+
+Early-warning readings (status 'normal', fault_probability > 0.60): 150
+   device_id device_type    plant_id          timestamp status  fault_probability  anomaly_score
+DEVICE_0008  power_meter       PLANT_HAMBURG   2025-10-12 22:00  normal  0.9997  0.613
+DEVICE_0005  power_meter       PLANT_LEIPZIG   2025-10-12 22:00  normal  0.9997  0.613
+...
 ```
+
+The **Top 20** table is dominated by readings that are *already* in
+`warning`/`critical`: because `fault_rate_5`/`fault_rate_10` (the fraction of the
+recent window already in a fault state) drive the model, a high score there is
+near-tautological — the device is mid-fault, so the next reading is almost
+certainly a fault too.
+
+The **early-warning view** is the more useful one. It lists readings still
+reporting `status = 'normal'` but with `fault_probability > 0.60` — cases where
+the model forecasts a fault *before* the status label flips. These are the
+readings just ahead of a developing fault run, and they are where the rolling
+features earn their keep over point-in-time status.
 
 ---
 
