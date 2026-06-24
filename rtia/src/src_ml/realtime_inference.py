@@ -178,21 +178,22 @@ def _fetch_context(device_id: str) -> pd.DataFrame:
     to flat columns the feature builder expects.
     """
     sql = text("""
-        SELECT
-            tags['device_id']                 AS device_id,
-            tags['device_type']               AS device_type,
-            tags['plant_id']                  AS plant_id,
-            "timestamp",
-            fields['metric_value']            AS metric_value,
-            fields['quality_score']           AS quality_score,
-            tags['status']                    AS status,
-            tags['metadata_firmware_version'] AS firmware_version
+        SELECT device_id, device_type, plant_id, "timestamp",
+               metric_value, quality_score, status, firmware_version
         FROM (
-            SELECT *,
-                   ROW_NUMBER() OVER (
-                       PARTITION BY tags['device_id']
-                       ORDER BY "timestamp" DESC
-                   ) AS rn
+            SELECT
+                tags['device_id']                 AS device_id,
+                tags['device_type']               AS device_type,
+                tags['plant_id']                  AS plant_id,
+                "timestamp",
+                fields['metric_value']            AS metric_value,
+                fields['quality_score']           AS quality_score,
+                tags['status']                    AS status,
+                tags['metadata_firmware_version'] AS firmware_version,
+                ROW_NUMBER() OVER (
+                    PARTITION BY tags['device_id']
+                    ORDER BY "timestamp" DESC
+                ) AS rn
             FROM rtia.iot_data
             WHERE tags['device_id'] = :device_id
         ) t

@@ -210,7 +210,15 @@ def load_aggregated_frame(engine, window='1 day', days=None):
 
 def load_scoring_frame(engine, device=None, context_rows=50):
     """Last `context_rows` readings per device for scoring (enough history for
-    rolling features to stabilise). `device` restricts to a single device_id."""
+    rolling features to stabilise). `device` restricts to a single device_id.
+
+    The ROW_NUMBER() window is computed over a *projected* subquery (only the
+    scalar columns the feature code needs) rather than `SELECT *`. With no
+    device filter the window must collect+sort the whole table, and `SELECT *`
+    drags the wide tags/fields OBJECTs and geo_location into that sort — enough
+    to trip the memory circuit breaker on a small cloud cluster. Projecting
+    first keeps the collected row width to the nine flat columns below.
+    """
     device_filter = ''
     params = {'rn': int(context_rows)}
     if device:
@@ -218,15 +226,16 @@ def load_scoring_frame(engine, device=None, context_rows=50):
         params['device'] = device
 
     sql = f"""
-    SELECT {SELECT_COLUMNS}
+    SELECT device_id, device_type, plant_id, "timestamp",
+           metric_value, metric_unit, status, quality_score, firmware_version
     FROM (
-        SELECT *,
+        SELECT {SELECT_COLUMNS},
                ROW_NUMBER() OVER (PARTITION BY tags['device_id']
                                   ORDER BY "timestamp" DESC) AS rn
         FROM rtia.iot_data
         {device_filter}
     ) t
     WHERE rn <= :rn
-    ORDER BY tags['device_id'], "timestamp"
+    ORDER BY device_id, "timestamp"
     """
     return _read_frame(engine, sql, params=params)

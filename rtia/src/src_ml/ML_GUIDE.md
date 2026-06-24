@@ -454,23 +454,28 @@ from sqlalchemy import create_engine
 
 engine = create_engine("crate://localhost:4200")
 
-# Pull the last 50 readings per device for rolling-feature context
+# Pull the last 50 readings per device for rolling-feature context.
+# Project the columns *before* the ROW_NUMBER() window rather than SELECT *:
+# with no device filter the window sorts the whole table, and carrying the wide
+# tags/fields OBJECTs through that sort can trip CrateDB's memory circuit
+# breaker on a small cluster.
 sql = """
-    SELECT tags['device_id']                 AS device_id,
-           tags['device_type']               AS device_type,
-           tags['plant_id']                  AS plant_id,
-           "timestamp",
-           fields['metric_value']            AS metric_value,
-           fields['quality_score']           AS quality_score,
-           tags['status']                    AS status,
-           tags['metadata_firmware_version'] AS firmware_version
+    SELECT device_id, device_type, plant_id, "timestamp",
+           metric_value, quality_score, status, firmware_version
     FROM (
-        SELECT *,
+        SELECT tags['device_id']                 AS device_id,
+               tags['device_type']               AS device_type,
+               tags['plant_id']                  AS plant_id,
+               "timestamp",
+               fields['metric_value']            AS metric_value,
+               fields['quality_score']           AS quality_score,
+               tags['status']                    AS status,
+               tags['metadata_firmware_version'] AS firmware_version,
                ROW_NUMBER() OVER (PARTITION BY tags['device_id'] ORDER BY "timestamp" DESC) AS rn
         FROM rtia.iot_data
     ) t
     WHERE rn <= 50
-    ORDER BY tags['device_id'], "timestamp"
+    ORDER BY device_id, "timestamp"
 """
 
 df = pd.read_sql(sql, engine)
