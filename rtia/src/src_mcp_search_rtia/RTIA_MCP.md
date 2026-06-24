@@ -75,9 +75,9 @@ pip install "mcp[cli]" httpx
 
 ## Step 2 — Create the server
 
-Save the following as [`rtia_mcp.py`](https://github.com/crate/cratedb-explore/blob/main/rtia/src/src_mcp_search_rtia/rtia_mcp.py).
+We provide a script called [`rtia_mcp.py`](https://github.com/crate/cratedb-explore/blob/main/rtia/src/src_mcp_search_rtia/rtia_mcp.py).
 It resolves the CrateDB connection and inference URL at startup, then defines the
-SQL tool and the four inference tools.
+SQL tool and the four inference tools. Edited highlights are below.
 
 ```python
 """
@@ -216,10 +216,6 @@ if __name__ == "__main__":
     mcp.run()
 ```
 
-> The snippet above trims the long `INSTRUCTIONS` string and a few docstrings for
-> readability — the committed `rtia_mcp.py` carries the full versions, which is
-> where the data rules actually live.
-
 A few details make this work against CrateDB:
 
 - The connection is resolved once at startup by `resolve_endpoint`, which reads
@@ -266,7 +262,7 @@ export CRATEDB_SCHEME=http          # https only if your cluster terminates TLS
 Run the script on its own first, so you register something that runs:
 
 ```bash
-python /path/to/rtia_mcp.py --cratedb-url "http://<user>:<password>@<host>:4200/"
+python rtia_mcp.py --cratedb-url "http://<user>:<password>@<host>:4200/"
 ```
 
 It should start and then wait silently for input on stdin (it's a stdio server
@@ -274,12 +270,14 @@ with no banner) — that means it launched cleanly; press Ctrl+C to stop it. If 
 exits with a traceback, fix that first: the usual causes are a wrong path or a
 `python` that can't see the installed `mcp`/`httpx` packages.
 
+Press Ctrl-c to stop it before continuing.
+
 ### Register with your assistant
 
 For Claude Code, everything after `--` is the launch command:
 
 ```bash
-claude mcp add rtia -- python /path/to/rtia_mcp.py --cratedb-url "http://<user>:<password>@<host>:4200/"
+claude mcp add rtia -- python rtia_mcp.py --cratedb-url "http://<user>:<password>@<host>:4200/"
 ```
 
 To check the server into a project, add it to a `.mcp.json` at the repo root
@@ -312,6 +310,9 @@ then confirm it connected: `claude mcp list` (or `/mcp` in a session) should sho
 
 With the server registered, ask a question in natural language:
 
+```commandline
+claude
+```
 > Show me the five devices with the worst recent sensor quality, and which plant
 > they're in.
 
@@ -340,19 +341,32 @@ and writes the prediction back to `rtia.fault_predictions`. Now you can ask:
 The assistant calls `inference_health` to confirm the service is up, then
 `score_device` — which returns:
 
-```json
-{
-  "device_id": "DEVICE_0042",
-  "device_type": "vibration_sensor",
-  "plant_id": "PLANT_DORTMUND",
-  "latest_reading_ts": "2025-10-11 22:03:14",
-  "current_status": "warning",
-  "fault_probability": 0.874,
-  "fault_risk_label": "high",
-  "anomaly_score": 0.291,
-  "context_rows_used": 50,
-  "latency_ms": 18.4
-}
+```commandline
+⏺ DEVICE_0042 needs attention — urgently.
+
+  ┌───────────────────┬─────────────────────┐
+  │       Field       │        Value        │
+  ├───────────────────┼─────────────────────┤
+  │ Device type       │ power_meter         │
+  ├───────────────────┼─────────────────────┤
+  │ Plant             │ PLANT_MUNICH        │
+  ├───────────────────┼─────────────────────┤
+  │ Current status    │ critical            │
+  ├───────────────────┼─────────────────────┤
+  │ Fault probability │ 0.9993 (99.93%)     │
+  ├───────────────────┼─────────────────────┤
+  │ Risk label        │ high                │
+  ├───────────────────┼─────────────────────┤
+  │ Anomaly score     │ 0.6318              │
+  ├───────────────────┼─────────────────────┤
+  │ Latest reading    │ 2025-10-13 11:00:00 │
+  └───────────────────┴─────────────────────┘
+
+  The model scored this device at a 99.93% fault probability (high risk), and its latest sensor status is already critical.
+  This is about as strong a signal as the model produces — it should be flagged for immediate maintenance, not deferred.
+
+  Want me to pull the device's recent iot_data readings (with their metric/unit) or any related maintenance_log notes to see
+  what is driving the critical status?
 ```
 
 Because the score is written to `rtia.fault_predictions`, the assistant can then
