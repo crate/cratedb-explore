@@ -401,9 +401,9 @@ So `predict_aggregated.py` **requires** the model file — running it first fail
 
 ```bash
 export CRATEDB_USER=... CRATEDB_PASSWORD=...
-python train_aggregated.py   --cratedb-url crate://localhost:4200          # 1-day windows
-python train_aggregated.py   --cratedb-url crate://localhost:4200 --window '6 hours'
-python predict_aggregated.py --cratedb-url crate://localhost:4200 --latest # score each device's next window
+python train_aggregated.py   --cratedb-url "$CRATEDB_ALCHEMY_URL"          # 1-day windows
+python train_aggregated.py   --cratedb-url "$CRATEDB_ALCHEMY_URL" --window '6 hours'
+python predict_aggregated.py --cratedb-url "$CRATEDB_ALCHEMY_URL" --latest # score each device's next window
 ```
 
 `predict_aggregated.py` defaults to the window the model was trained on, and `--latest` keeps only the most recent window per device. The shared query:
@@ -439,20 +439,21 @@ This is implemented as `score_fleet_to_crate.py`: it pulls the last 50 readings 
 
 ```bash
 export CRATEDB_USER=... CRATEDB_PASSWORD=...
-python score_fleet_to_crate.py --cratedb-url crate://localhost:4200                  # read CrateDB
-python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --input ../../data/iot_demo_dataset.json
-python score_fleet_to_crate.py --cratedb-url crate://localhost:4200 --device DEVICE_0042
+python score_fleet_to_crate.py --cratedb-url "$CRATEDB_ALCHEMY_URL"                  # read CrateDB
+python score_fleet_to_crate.py --cratedb-url "$CRATEDB_ALCHEMY_URL" --input ../../data/iot_demo_dataset.json
+python score_fleet_to_crate.py --cratedb-url "$CRATEDB_ALCHEMY_URL" --device DEVICE_0042
 ```
 
 It appends to `rtia.fault_predictions` — the table the batch job and the live service share. That table is created by `rtia/sql/rtia_schema_create.sql`; if it is missing the script fails with a clear message rather than auto-creating it (an inferred schema would be PK-less). The equivalent pipeline written out by hand:
 
 ```python
+import os
 import pickle
 import numpy as np
 import pandas as pd
 from sqlalchemy import create_engine
 
-engine = create_engine("crate://localhost:4200")
+engine = create_engine(os.environ["CRATEDB_ALCHEMY_URL"])
 
 # Pull the last 50 readings per device for rolling-feature context.
 # Project the columns *before* the ROW_NUMBER() window rather than SELECT *:
