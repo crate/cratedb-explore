@@ -367,6 +367,75 @@ The assistant calls `inference_health` to confirm the service is up, then
 
   Want me to pull the device's recent iot_data readings (with their metric/unit) or any related maintenance_log notes to see
   what is driving the critical status?
+  
+  
+✻ Baked for 15s
+
+❯ show me what's driving the critical status                                                                                  
+
+⏺ I'll confirm the schema first (mandatory), then pull DEVICE_0042's latest readings and any maintenance notes.
+
+  Called rtia 4 times (ctrl+o to expand)
+
+⏺ Let me grab a baseline of this meter's normal range to show how far it's drifted.
+
+  Called rtia (ctrl+o to expand)
+
+⏺ Here's what's driving DEVICE_0042's critical status — a power meter at PLANT_MUNICH reading in kW:
+
+  The sensor trend (last 7 readings, hourly, newest first)
+
+  ┌────────────┬────────────┬─────────┬─────────────┐
+  │ Time (UTC) │ Power (kW) │ Quality │   Status    │
+  ├────────────┼────────────┼─────────┼─────────────┤
+  │ 11:00      │ 549.5      │ 49.2    │ 🔴 critical │
+  ├────────────┼────────────┼─────────┼─────────────┤
+  │ 10:00      │ 553.3      │ 49.8    │ 🔴 critical │
+  ├────────────┼────────────┼─────────┼─────────────┤
+  │ 09:00      │ 534.1      │ 54.5    │ 🟡 warning  │
+  ├────────────┼────────────┼─────────┼─────────────┤
+  │ 08:00      │ 553.6      │ 57.3    │ 🟡 warning  │
+  ├────────────┼────────────┼─────────┼─────────────┤
+  │ 07:00      │ 531.6      │ 56.2    │ 🟡 warning  │
+  ├────────────┼────────────┼─────────┼─────────────┤
+  │ 06:00      │ 545.8      │ 54.5    │ 🟡 warning  │
+  ├────────────┼────────────┼─────────┼─────────────┤
+  │ 05:00      │ 524.4      │ 56.5    │ 🟡 warning  │
+  └────────────┴────────────┴─────────┴─────────────┘
+
+  Versus its own normal baseline
+  
+  ┌───────────────┬───────────────────────┬─────────┐
+  │    Metric     │ Normal (976 readings) │   Now   │
+  ├───────────────┼───────────────────────┼─────────┤
+  │ Power         │ 311–478 kW, avg ~383  │ ~550 kW │
+  ├───────────────┼───────────────────────┼─────────┤
+  │ Quality score │ avg ~95               │ ~49     │
+  └───────────────┴───────────────────────┴─────────┘
+
+  What this means
+
+  - Sustained power overdraw. The meter is pinned around 550 kW — roughly 44% above its normal average (~383 kW) and well past
+  its historical max (478 kW). This isn't a momentary spike; it's been elevated for at least 7 hours, escalating from warning
+  to critical in the last two readings.
+  - Collapsed signal quality. The quality_score has dropped from a normal ~95 to ~49, meaning the readings themselves are
+  degraded/unreliable on top of the high values — consistent with a sensor or load-side fault.
+  - That combination (out-of-range value + halved quality, sustained and worsening) is what pushes the model to 0.9993 fault 
+  probability.
+
+  Maintenance history (no recent intervention)
+  
+  The last work order was over 2 years ago, and there's a telling precedent:
+
+  - WO-00147 (Oct 2022, corrective, €2,322) — "Replaced worn sensor element, values restored to normal range." — the same
+  failure mode (drifting values) happened before and required a sensor-element replacement.
+  - WO-00146 (Jan 2024, preventive) — gasket replaced.
+  - WO-00148 (Jul 2023, preventive) — annual calibration. No calibration since ~3 years.
+
+  Recommendation: raise a corrective work order now. The pattern (sustained overdraw + quality collapse, overdue calibration)
+  closely matches the 2022 worn-sensor-element failure — start there, and verify whether the ~550 kW is a genuine electrical
+  overload at the line or a failing meter before clearing it.
+
 ```
 
 Because the score is written to `rtia.fault_predictions`, the assistant can then
