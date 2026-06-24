@@ -4,9 +4,9 @@
 
 This repository holds **two self-contained demo scenarios**, each in its own project tree, that showcase the same CrateDB techniques — geo containment, full-text `MATCH`, vector `KNN_MATCH`, and sub-second aggregation — against very different data:
 
-| Scenario                                                                                       | Tree                    | Schema | What it is                                                                                                                                                  |
-| ---------------------------------------------------------------------------------------------- | ----------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[German Weather (SDA)](#scenario-1--german-weather-sda)**                                    | [`sda/`](sda/README.md)   | `demo` | Real-time IoT analytics over German weather data: load generators, a KNN search CLI, a Kafka stream-load pipeline, an MCP server, and a Grafana dashboard. |
+| Scenario                                                                                      | Tree                    | Schema | What it is                                                                                                                                                  |
+|-----------------------------------------------------------------------------------------------| ----------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[German Weather, aka 'Sensor Data Analytics', (SDA)](#scenario-1--german-weather-sda)**     | [`sda/`](sda/README.md)   | `demo` | Real-time IoT analytics over German weather data: load generators, a KNN search CLI, a Kafka stream-load pipeline, an MCP server, and a Grafana dashboard. |
 | **[Real Time Industrial Analytics (RTIA)](#scenario-2--real-time-industrial-analytics-rtia)** | [`rtia/`](rtia/README.md) | `rtia` | A SQL-and-dashboard walkthrough over a fictional fleet of German factories, plus Telegraf ingestion, a predictive-maintenance ML pipeline, and an MCP server. |
 
 The two scenarios are independent — pick whichever fits what you want to explore. Everything that is **shared** (environment variables, prerequisites) is documented in the top-level sections below; each scenario's own section is self-contained from there.
