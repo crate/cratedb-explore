@@ -2,14 +2,14 @@
 
 # CrateDB Explore
 
-<img src="sda/doc/screenshot1.png" alt="Weather monitoring dashboard" width="100%">
-<img src="sda/doc/screenshot2.png" alt="Weather monitoring key indicators" width="100%">
+This repository holds **two self-contained demo scenarios**, each in its own project tree, that showcase the same CrateDB techniques — geo containment, full-text `MATCH`, vector `KNN_MATCH`, and sub-second aggregation — against very different data:
 
-This project accompanies the [CrateDB Explore: IoT Analytics](https://cratedb.com/explore/iot-analytics?use-case=iot) hands-on demo. That demo walks you through real-time IoT analytics using weather monitoring data — 260k timestamped readings from 80 weather stations across Germany with temperature, humidity, and pressure values. You run hourly aggregations in under a second, execute geographic SQL queries, and connect a live Grafana dashboard, all in about 30 minutes.
+| Scenario                                                                                       | Tree                    | Schema | What it is                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------- | ----------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[German Weather (SDA)](#scenario-1--german-weather-sda)**                                    | [`sda/`](sda/README.md)   | `demo` | Real-time IoT analytics over German weather data: load generators, a KNN search CLI, a Kafka stream-load pipeline, an MCP server, and a Grafana dashboard. |
+| **[Real Time Industrial Analytics (RTIA)](#scenario-2--real-time-industrial-analytics-rtia)** | [`rtia/`](rtia/README.md) | `rtia` | A SQL-and-dashboard walkthrough over a fictional fleet of German factories, plus Telegraf ingestion, a predictive-maintenance ML pipeline, and an MCP server. |
 
-The load generators in this repository let you drive that same dataset with a configurable mix of geo-proximity, multi-table join, and full-text search queries over the PostgreSQL wire protocol. Each implementation produces identical workloads and reports latency percentiles via [HdrHistogram](https://github.com/HdrHistogram/HdrHistogram).
-
-The repository also contains a second, self-contained scenario — **[Real Time Industrial Analytics (RTIA)](#real-time-industrial-analytics-rtia)** — a SQL-and-dashboard walkthrough over a fictional fleet of German factories (plants, devices, maintenance logs, and live sensor readings in the `rtia` schema). It reuses the same CrateDB techniques — geo containment, full-text `MATCH`, and vector `KNN_MATCH` — against industrial data instead of weather. Everything from here down to the Grafana dashboard covers the **weather** demo; RTIA has its own section near the end.
+The two scenarios are independent — pick whichever fits what you want to explore. Everything that is **shared** (environment variables, prerequisites) is documented in the top-level sections below; each scenario's own section is self-contained from there.
 
 ## Environment variables
 
@@ -23,7 +23,28 @@ source env.sh
 
 You only set **one server, one user, and one password** — `CRATEDB_HOST`, `CRATEDB_USER`, `CRATEDB_PASSWORD`, and `CRATEDB_SCHEME` in the template's *EDIT THESE* block. The various protocol-specific connection URLs each module needs (`CRATEDB_CLUSTER_URL` for the MCP servers over HTTP, `CRATEDB_ALCHEMY_URL` for `src_ml`'s SQLAlchemy `crate://`, `CRATEDB_URL` for the stream-load consumer, the PostgreSQL `CRATEDB_PORT` for the KNN CLI) are **derived** from those in the *DERIVED* block — leave them alone. Credentials are never embedded in the URLs; every module reads them from `CRATEDB_USER` / `CRATEDB_PASSWORD`, so there is a single place to change them.
 
-Each module consumes only the variables it needs, so one sourced file covers the load generators, the KNN CLI, the MCP servers, `src_ml`, and the stream-load and Telegraf scenarios. The per-module READMEs document their own variables in detail.
+Each module consumes only the variables it needs, so one sourced file covers both scenarios. The per-module READMEs document their own variables in detail.
+
+## Prerequisites
+
+- Network access to your CrateDB cluster (port 5432 for the PostgreSQL-wire modules, port 4200 for the HTTP `_sql` / MCP modules).
+- A copy of [`env.example.sh`](env.example.sh) filled in and sourced (see above).
+- The schema for whichever scenario you are running, populated from its SQL scripts. The German Weather demo uses the `demo` schema; RTIA uses the `rtia` schema — each scenario's section explains how to load it.
+
+See each implementation's README for language-specific setup and usage instructions.
+
+---
+
+# Scenario 1 — German Weather (SDA)
+
+<img src="sda/doc/screenshot1.png" alt="Weather monitoring dashboard" width="100%">
+<img src="sda/doc/screenshot2.png" alt="Weather monitoring key indicators" width="100%">
+
+This scenario accompanies the [CrateDB Explore: IoT Analytics](https://cratedb.com/explore/iot-analytics?use-case=iot) hands-on demo. That demo walks you through real-time IoT analytics using weather monitoring data — 260k timestamped readings from 80 weather stations across Germany with temperature, humidity, and pressure values. You run hourly aggregations in under a second, execute geographic SQL queries, and connect a live Grafana dashboard, all in about 30 minutes.
+
+The load generators in this tree let you drive that same dataset with a configurable mix of geo-proximity, multi-table join, and full-text search queries over the PostgreSQL wire protocol. Each implementation produces identical workloads and reports latency percentiles via [HdrHistogram](https://github.com/HdrHistogram/HdrHistogram).
+
+Everything in this scenario lives under [`sda/`](sda/README.md).
 
 ## Weather Load Generators
 
@@ -136,19 +157,25 @@ See the [MCP Search overview](sda/src/src_mcp_search_german_weather/README.md) f
 
 ## Grafana Dashboard
 
-The `sda/grafana/` directory contains pre-built dashboards for visualizing the data:
+The `sda/grafana/` directory contains a pre-built dashboard for visualizing the data:
 
 | File                                                           | Description                                                                                                                                             |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`german_weather_data.json`](sda/grafana/german_weather_data.json) | Importable Grafana dashboard with geomap, gauge, and time-series panels for the weather data. Connects to CrateDB via the PostgreSQL datasource plugin. |
 
-To use one, add a PostgreSQL datasource in Grafana pointing at your CrateDB cluster, then import the JSON file via **Dashboards > Import**.
+To use it, add a PostgreSQL datasource in Grafana pointing at your CrateDB cluster, then import the JSON file via **Dashboards > Import**.
 
-## Real Time Industrial Analytics (RTIA)
+---
 
-A second, self-contained demo scenario that applies the same CrateDB techniques to **industrial** data instead of weather. It models a small fleet of German factories — five plants, their devices, a maintenance log, and a stream of sensor readings — in the `rtia` schema, and walks through the queries an operations team would run against them: status distribution, fault-rate trends, OEE approximation, maintenance cost, geo-proximity, full-text incident search, and semantic search over maintenance notes.
+# Scenario 2 — Real Time Industrial Analytics (RTIA)
 
-Unlike the weather demo, RTIA has **no load generator** — it is delivered entirely as SQL scripts plus a Grafana dashboard. The data is pulled straight from a public S3 bucket by the `COPY FROM` statements in the schema script, so there is nothing to load by hand. Run the four scripts in order:
+A self-contained demo scenario that applies the same CrateDB techniques to **industrial** data instead of weather. It models a small fleet of German factories — five plants, their devices, a maintenance log, and a stream of sensor readings — in the `rtia` schema, and walks through the queries an operations team would run against them: status distribution, fault-rate trends, OEE approximation, maintenance cost, geo-proximity, full-text incident search, and semantic search over maintenance notes.
+
+Everything in this scenario lives under [`rtia/`](rtia/README.md).
+
+## SQL scripts
+
+Unlike the weather scenario, RTIA's data load is **pure SQL** — the data is pulled straight from a public S3 bucket by the `COPY FROM` statements in the schema script, so there is nothing to load by hand. Run the four scripts in order:
 
 | File                                                         | Description                                                                                                                                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -161,24 +188,23 @@ The maintenance-note vectors are 384-dimension `FLOAT_VECTOR` embeddings (senten
 
 `iot_data` is stored in the Telegraf line-protocol shape — `hash_id`, `timestamp`, `name`, a `tags` `OBJECT` for the string dimensions (`tags['device_id']`, `tags['status']`, `tags['plant_id']`, the flattened `tags['metadata_*']`, …) and a `fields` `OBJECT` for the numeric measurements (`fields['metric_value']`, `fields['quality_score']`). The geo coordinates ride along as plain doubles (`fields['geo_lon']` / `fields['geo_lat']`) and `geo_location` is a `GEO_POINT` `GENERATED` from them. That shape lets the same table be populated either by the `COPY FROM` in the schema script or by Telegraf's `outputs.cratedb` (postgres/crate) plugin, which can't write a `GEO_POINT` directly — so the query scripts and dashboard reach into the objects with `tags['…']` / `fields['…']` bracket notation.
 
-### Telegraf ingestion
+## Telegraf ingestion
 
 [`rtia/src/src_telegraf/`](rtia/src/src_telegraf/) is the live-streaming counterpart to the `COPY FROM` bulk load: a Python script replays the dataset to a [Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) HTTP listener, which writes to the **same** `rtia.iot_data` table via Telegraf's native `outputs.cratedb` plugin over the PostgreSQL wire protocol (port 5432). CrateDB has no InfluxDB line-protocol endpoint, so `outputs.cratedb` is the supported path; geo still works because `geo_location` is `GENERATED` from the `geo_lon` / `geo_lat` fields. See [`rtia/src/src_telegraf/TELEGRAF_GUIDE.md`](rtia/src/src_telegraf/TELEGRAF_GUIDE.md) for the full walkthrough.
 
-### Machine learning
+## Machine learning
 
 [`rtia/src/src_ml/`](rtia/src/src_ml/) trains two models from the same `rtia.iot_data` readings: an XGBoost **predictive-maintenance classifier** (will a device enter warning/critical within the next few readings?) and an Isolation Forest **anomaly detector**. `train_model.py` and `predict.py` work offline from the dataset file, while `realtime_inference.py` is a FastAPI service that fetches each device's recent history from CrateDB, scores it, and writes the prediction back — so results are queryable alongside the raw sensor data. The guide also shows how to swap the file read for SQL against `rtia.iot_data` (scheduled retraining, in-database feature aggregation, live scoring). See [`rtia/src/src_ml/ML_GUIDE.md`](rtia/src/src_ml/ML_GUIDE.md) for the full walkthrough.
 
-### Dashboard
+## MCP Search (Claude + CrateDB)
+
+[`rtia/src/src_mcp_search_rtia/`](rtia/src/src_mcp_search_rtia/README.md) is the RTIA counterpart to the weather MCP server — the same `query_sql`-over-`_sql` shape, but with `Default-Schema: rtia` and the RTIA data rules baked into its instructions. It adds four tools (`inference_health`, `score_device`, `score_batch`, `fleet_high_risk`) that proxy the `src_ml` FastAPI service, so the connecting model can trigger live ML scoring as well as run SQL. A draft cratedb.com walkthrough lives in [`RTIA_MCP.md`](rtia/src/src_mcp_search_rtia/RTIA_MCP.md).
+
+## Grafana Dashboard
 
 [`rtia/grafana/rtia.json`](rtia/grafana/rtia.json) is the **"Real Time Industrial Analytics Dashboard"** — summary KPIs, critical-event tracking, device-level detail, maintenance cost by plant, OEE, KNN searches, full-text search, and geospatial panels over the `rtia` schema. Import it the same way as the weather dashboard: add a PostgreSQL datasource pointing at your CrateDB cluster, then **Dashboards > Import**.
 
-## Prerequisites
-
-- Network access to your CrateDB cluster on port 5432
-- The tables above populated in a `demo` schema (run the DDL then DML scripts)
-
-See each implementation's README for language-specific setup and usage instructions.
+---
 
 ## License
 
