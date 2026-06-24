@@ -64,9 +64,12 @@ the assistant reports the value with its unit and never converts.
 
 ## Step 1 — Install the dependencies
 
-Install the MCP Python SDK and an HTTP client:
+Create and activate a virtual environment first so these packages stay isolated
+from your system Python, then install the MCP Python SDK and an HTTP client:
 
 ```bash
+python -m venv .venv .           # If needed....  
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install "mcp[cli]" httpx
 ```
 

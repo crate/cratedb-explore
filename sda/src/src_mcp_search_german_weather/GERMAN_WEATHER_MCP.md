@@ -39,9 +39,12 @@ The demo data lives in the `demo` schema and models a weather sensor network:
 
 ## Step 1 — Install the dependencies
 
-Install the MCP Python SDK and an HTTP client:
+Create and activate a virtual environment first so these packages stay isolated
+from your system Python, then install the MCP Python SDK and an HTTP client:
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install "mcp[cli]" httpx
 ```
 
