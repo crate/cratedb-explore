@@ -45,7 +45,7 @@ from your system Python, then install the MCP Python SDK and an HTTP client:
 ```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install "mcp[cli]" httpx
 ```
 
 ## Step 2 — Create the server
