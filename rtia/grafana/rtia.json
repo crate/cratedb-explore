@@ -4099,7 +4099,7 @@
                         }
                       },
                       "labels": {
-                        "grafana.app/export-label": "grafana-postgresql-datasource-2"
+                        "grafana.app/export-label": "grafana-postgresql-datasource-1"
                       }
                     },
                     "refId": "A",
