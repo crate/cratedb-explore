@@ -101,7 +101,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--cratedb-user", help="CrateDB username.")
     p.add_argument("--cratedb-password", help="CrateDB password.")
     p.add_argument("--cratedb-scheme", help="http or https.")
-    return p.parse_args()
+    # parse_known_args so the MCP CLI (mcp dev/run/install) can import this
+    # module without its own argv aborting the parse.
+    return p.parse_known_args()[0]
 
 
 def resolve_endpoint(args: argparse.Namespace) -> tuple[str, tuple[str, str]]:
@@ -132,8 +134,8 @@ def resolve_endpoint(args: argparse.Namespace) -> tuple[str, tuple[str, str]]:
         scheme = u.scheme or DEFAULTS["scheme"]
         host = u.hostname or DEFAULTS["host"]
         port = str(u.port or DEFAULTS["port"])
-        user = u.username or DEFAULTS["user"]
-        password = u.password or DEFAULTS["password"]
+        user = u.username or os.environ.get("CRATEDB_USER") or DEFAULTS["user"]
+        password = u.password or os.environ.get("CRATEDB_PASSWORD") or DEFAULTS["password"]
     else:
         scheme = args.cratedb_scheme or os.environ.get("CRATEDB_SCHEME") or DEFAULTS["scheme"]
         host = args.cratedb_host or os.environ.get("CRATEDB_HOST") or DEFAULTS["host"]
