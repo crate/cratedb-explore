@@ -339,7 +339,6 @@ def main(input_file: str, device_filter, n_rows: int, cratedb_url=None):
     print(f'Rows scored: {len(out):,}')
     print(f'\nFault risk distribution:')
     print(out['fault_risk_label'].value_counts().to_string())
-    print(f'\nTop 20 highest fault-probability readings:')
     top10 = out.nlargest(20, 'fault_probability')[
         ['device_id', 'device_type', 'plant_id', 'timestamp',
          'status', 'fault_probability', 'anomaly_score']
