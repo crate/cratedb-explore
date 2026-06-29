@@ -1,8 +1,8 @@
 # src_rag — agentic RAG over the rtia schema
 
-Retrieval-Augmented Generation over the `rtia` schema where **Claude chooses how
-to retrieve**. It gets two tools and routes per question — fusing this repo's two
-patterns (the src_rag KNN path and the `src_mcp_search_rtia` `query_sql` path)
+In this example we show Retrieval-Augmented Generation over the `rtia` schema where 
+**Claude chooses how and what to retrieve**. It gets two tools and routes per 
+question — fusing this repo's two  patterns (the src_rag KNN path and the `src_mcp_search_rtia` `query_sql` path)
 into one agentic tool-use loop:
 
 - **`semantic_search`** — embed the question (all-MiniLM-L6-v2, 384-dim) and
@@ -19,6 +19,18 @@ Claude may use either or both, then answers grounded in the tool results
 | --- | --- |
 | `rtia_rag.py` | The pipeline + a CLI. Manual tool-use loop with the two tool handlers; `run_sql` executes over the same psycopg connection (read-only guard) and `semantic_search` reuses the query-embedding cache. |
 | `rtia_rag_ui.py` | A Streamlit front-end that renders the tool trace (cache hit/miss, matched work orders, SQL + rows) and the grounded answer. Unchecking "agentic" falls back to a single `semantic_search` (no Claude). |
+
+## Prerequisites and a minor warning
+
+In order to use this you need an Anthropic API Key, and to have exported it as ANTHROPIC_API_KEY in your 
+environment. 
+
+In the demo we use Anthropic's API to 'score' text strings, which are them compared to the embedding 
+column 'notes_embedding' in the table rtia.maintenance_log. Each time you do this it will cost *you* money. 
+For fairly obvious reasons we add the results of scoring attempts to the table "rtia"."knn_searches", so 
+repeated searches should avoid the API toll.
+
+You also need to have set CRATEDB_HOST, CRATEDB_USER and CRATEDB_PASSWORD to real values.
 
 ## The query-embedding cache
 
