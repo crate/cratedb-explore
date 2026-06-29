@@ -363,34 +363,42 @@ def tool_similar_devices(conn, device_id, k):
     """
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT behavior_vector, device_type, n_critical, n_readings "
-            "FROM rtia.device_behavior WHERE device_id = %s", (device_id,))
+            "SELECT b.behavior_vector, b.device_type, b.n_critical, b.n_readings, "
+            "       d.plant_id, d.line_id "
+            "FROM rtia.device_behavior b JOIN rtia.devices d ON d.device_id = b.device_id "
+            "WHERE b.device_id = %s", (device_id,))
         row = cur.fetchone()
         if not row:
             return (f"ERROR: no behaviour vector for device {device_id} "
                     f"(is it in rtia.device_behavior?)", {"error": True})
-        qvec, dtype, q_crit, q_n = row
+        qvec, dtype, q_crit, q_n, q_plant, q_line = row
         # Match over the whole table (vectors are per-type standardized, so other
         # types can sit nearby), then keep same-type neighbours, excluding self.
+        # Join devices (1 row/device, no fan-out) for each neighbour's plant/line,
+        # so the answer can spot a shared plant or line — a likely common cause.
         cur.execute(
-            "SELECT device_id, device_type, n_critical, n_warning, n_readings, _score "
-            "FROM rtia.device_behavior "
-            "WHERE KNN_MATCH(behavior_vector, %s, %s) "
-            "  AND device_type = %s AND device_id <> %s "
-            "ORDER BY _score DESC LIMIT %s",
+            "SELECT b.device_id, b.device_type, d.plant_id, d.line_id, "
+            "       b.n_critical, b.n_warning, b.n_readings, b._score "
+            "FROM rtia.device_behavior b JOIN rtia.devices d ON d.device_id = b.device_id "
+            "WHERE KNN_MATCH(b.behavior_vector, %s, %s) "
+            "  AND b.device_type = %s AND b.device_id <> %s "
+            "ORDER BY b._score DESC LIMIT %s",
             (qvec, 500, dtype, device_id, k))
         cols = [d[0] for d in cur.description]
         rows = cur.fetchall()
     print(f"[tool] similar_devices({device_id}, k={k}) → {len(rows)} {dtype} neighbours",
           file=sys.stderr)
     neigh = [dict(zip(cols, r)) for r in rows]
-    header = (f"query device {device_id} ({dtype}): {q_crit} critical of {q_n} readings")
+    header = (f"query device {device_id} ({dtype}, plant={q_plant} line={q_line}): "
+              f"{q_crit} critical of {q_n} readings")
     lines = [header, "most behaviourally similar devices (same device_type):"]
-    lines += [f"  {r['device_id']}  critical={r['n_critical']} warning={r['n_warning']} "
+    lines += [f"  {r['device_id']}  plant={r['plant_id']} line={r['line_id']} "
+              f"critical={r['n_critical']} warning={r['n_warning']} "
               f"score={r['_score']:.4f}" for r in neigh]
     text = "\n".join(lines) if neigh else f"{header}\n(no other {dtype} devices found)"
     return text, {"error": False, "query": {"device_id": device_id, "device_type": dtype,
-                  "n_critical": q_crit, "n_readings": q_n}, "rows": neigh}
+                  "n_critical": q_crit, "n_readings": q_n, "plant_id": q_plant,
+                  "line_id": q_line}, "rows": neigh}
 
 
 def generate(model, question, conn, embed_model, default_k, on_event=None):

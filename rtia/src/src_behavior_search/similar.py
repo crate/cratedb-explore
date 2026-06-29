@@ -40,23 +40,29 @@ import behavior_features as bf
 def find_similar(device_id: str, k: int = 8):
     """Return (query_row, neighbours). query_row is None if the device is unknown."""
     _, rows = bf.run_sql(
-        "SELECT behavior_vector, device_type, n_critical, n_readings "
-        "FROM device_behavior WHERE device_id = ?", args=[device_id])
+        "SELECT b.behavior_vector, b.device_type, b.n_critical, b.n_readings, "
+        "       d.plant_id, d.line_id "
+        "FROM device_behavior b JOIN devices d ON d.device_id = b.device_id "
+        "WHERE b.device_id = ?", args=[device_id])
     if not rows:
         return None, []
-    qvec, dtype, q_crit, q_n = rows[0]
+    qvec, dtype, q_crit, q_n, q_plant, q_line = rows[0]
     # KNN_MATCH returns approximate nearest over the whole table; vectors are
     # per-type standardized so other types CAN sit near in the shared space.
     # Ask for the whole table (500) then keep same-type neighbours, excluding self.
+    # Join devices (1 row/device) for each neighbour's plant/line — a shared plant
+    # or line among co-faulting neighbours points at a likely common cause.
     cols, neigh = bf.run_sql(
-        "SELECT device_id, device_type, n_critical, n_warning, n_readings, _score "
-        "FROM device_behavior "
-        f"WHERE KNN_MATCH(behavior_vector, {bf.vec_literal(qvec)}, 500) "
-        "  AND device_type = ? AND device_id <> ? "
-        "ORDER BY _score DESC LIMIT ?",
+        "SELECT b.device_id, b.device_type, d.plant_id, d.line_id, "
+        "       b.n_critical, b.n_warning, b.n_readings, b._score "
+        "FROM device_behavior b JOIN devices d ON d.device_id = b.device_id "
+        f"WHERE KNN_MATCH(b.behavior_vector, {bf.vec_literal(qvec)}, 500) "
+        "  AND b.device_type = ? AND b.device_id <> ? "
+        "ORDER BY b._score DESC LIMIT ?",
         args=[dtype, device_id, k])
-    return {"device_id": device_id, "device_type": dtype,
-            "n_critical": q_crit, "n_readings": q_n}, [dict(zip(cols, r)) for r in neigh]
+    return {"device_id": device_id, "device_type": dtype, "n_critical": q_crit,
+            "n_readings": q_n, "plant_id": q_plant, "line_id": q_line}, \
+        [dict(zip(cols, r)) for r in neigh]
 
 
 def main():
@@ -69,11 +75,12 @@ def main():
     if q is None:
         print(f"No behaviour vector for {args.device_id} — is it in device_behavior?", file=sys.stderr)
         return 1
-    print(f"Query: {q['device_id']} ({q['device_type']}) — "
-          f"{q['n_critical']} critical of {q['n_readings']} readings\n")
-    print(f"{'rank':>4}  {'device_id':14} {'crit':>5} {'warn':>5}  score")
+    print(f"Query: {q['device_id']} ({q['device_type']}, plant={q['plant_id']} "
+          f"line={q['line_id']}) — {q['n_critical']} critical of {q['n_readings']} readings\n")
+    print(f"{'rank':>4}  {'device_id':14} {'plant':16} {'line':9} {'crit':>5} {'warn':>5}  score")
     for i, r in enumerate(neigh, 1):
-        print(f"{i:>4}  {r['device_id']:14} {r['n_critical']:>5} {r['n_warning']:>5}  {r['_score']:.4f}")
+        print(f"{i:>4}  {r['device_id']:14} {r['plant_id']:16} {r['line_id']:9} "
+              f"{r['n_critical']:>5} {r['n_warning']:>5}  {r['_score']:.4f}")
     return 0
 
 
