@@ -33,6 +33,12 @@ the src_mcp_search_rtia query_sql path — into one agentic tool-use loop:
   run_sql         : run a read-only SELECT over the rtia schema. For "which / how
                     many / by technician / totals" questions that need an exact set
                     or aggregate, which a KNN top-k sample cannot give.
+  similar_devices : find devices whose recent sensor behaviour resembles a given
+                    device — KNN over rtia.device_behavior (a numeric behaviour
+                    vector per device), scoped to the same device_type. For "which
+                    devices behave like X / find similar devices" questions, the
+                    numeric analogue of semantic_search over notes. Built by the
+                    src_behavior_search module; see its README.
 
 Claude routes per question (and may use both), then answers grounded in the tool
 results, citing the work orders / devices / aggregates it used. The query
@@ -106,14 +112,24 @@ SYSTEM_PROMPT = (
     "'which / how many / list all / totals / group by / by technician or plant' "
     "questions — anything that needs an exact set, a count, or an aggregate, "
     "which KNN's top-k sample cannot give. You may call both (e.g. semantic_search "
-    "to find the relevant failure mode, then run_sql to aggregate over it).\n\n"
+    "to find the relevant failure mode, then run_sql to aggregate over it).\n"
+    "  - similar_devices: given a device_id, find the devices whose recent sensor "
+    "behaviour is most similar, via KNN over a numeric behaviour vector. Use it "
+    "for 'which devices behave like X / find similar devices / others with this "
+    "profile' questions. Comparison is only within the same device_type (each "
+    "device measures one metric, and units differ across types). It surfaces "
+    "devices with a similar operating profile, including co-faulting ones.\n\n"
     "Key tables: maintenance_log (work_order_id, device_id, plant_id, "
     "maintenance_type, technician, scheduled_date, completed_date, "
     "duration_hours, cost_eur, status, full-text `notes`, notes_embedding); "
     "devices (1 row per device: device_id, device_type, plant_id, line_id, ...); "
     "plants; iot_data (Telegraf shape: tags['device_id'], tags['status'], "
     "tags['metric_unit'], fields['metric_value'], fields['quality_score']); "
-    "fault_predictions (ML output, denormalised). Before querying columns you are "
+    "fault_predictions (ML output, denormalised); device_behavior (1 row per "
+    "device: device_id, device_type, n_readings, n_critical, n_warning, and a "
+    "behaviour_vector the similar_devices tool searches; device_type is one of "
+    "temperature_sensor, vibration_sensor, power_meter, pressure_sensor, "
+    "flow_meter). Before querying columns you are "
     "unsure of, check information_schema.columns for table_schema='rtia'.\n\n"
     "rtia data rules: sensor values are NOT Kelvin — each iot_data reading's unit "
     "is in tags['metric_unit'] (C, mm/s, bar, ...); report the value with its unit "
@@ -161,6 +177,26 @@ TOOLS = [
                 "statement": {"type": "string", "description": "A read-only SQL statement over the rtia schema."},
             },
             "required": ["statement"],
+        },
+    },
+    {
+        "name": "similar_devices",
+        "description": (
+            "Given a device_id, return the devices whose recent sensor behaviour is "
+            "most similar, via KNN_MATCH over rtia.device_behavior. Comparison is "
+            "scoped to the same device_type (units differ across types). Each "
+            "neighbour comes with its fault counts (n_critical / n_warning), so this "
+            "surfaces devices with a similar operating profile, including ones that "
+            "are co-faulting. Use for 'which devices behave like X / find similar "
+            "devices'. The given device must exist in device_behavior."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "device_id": {"type": "string", "description": "The device to find behavioural neighbours for, e.g. DEVICE_0180."},
+                "k": {"type": "integer", "description": "How many similar devices to return (default 8)."},
+            },
+            "required": ["device_id"],
         },
     },
 ]
@@ -317,6 +353,46 @@ def tool_run_sql(conn, statement):
     return text, {"error": False, "cols": cols, "rows": rows, "statement": statement}
 
 
+def tool_similar_devices(conn, device_id, k):
+    """similar_devices handler: KNN_MATCH over rtia.device_behavior, within type.
+
+    Reads the query device's stored (within-type standardized) behaviour vector,
+    then KNN-matches it against the fleet scoped to the same device_type — the
+    numeric mirror of retrieve() over notes_embedding. Vectors are populated by
+    the src_behavior_search backfill; if the device isn't there yet, say so.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT behavior_vector, device_type, n_critical, n_readings "
+            "FROM rtia.device_behavior WHERE device_id = %s", (device_id,))
+        row = cur.fetchone()
+        if not row:
+            return (f"ERROR: no behaviour vector for device {device_id} "
+                    f"(is it in rtia.device_behavior?)", {"error": True})
+        qvec, dtype, q_crit, q_n = row
+        # Match over the whole table (vectors are per-type standardized, so other
+        # types can sit nearby), then keep same-type neighbours, excluding self.
+        cur.execute(
+            "SELECT device_id, device_type, n_critical, n_warning, n_readings, _score "
+            "FROM rtia.device_behavior "
+            "WHERE KNN_MATCH(behavior_vector, %s, %s) "
+            "  AND device_type = %s AND device_id <> %s "
+            "ORDER BY _score DESC LIMIT %s",
+            (qvec, 500, dtype, device_id, k))
+        cols = [d[0] for d in cur.description]
+        rows = cur.fetchall()
+    print(f"[tool] similar_devices({device_id}, k={k}) → {len(rows)} {dtype} neighbours",
+          file=sys.stderr)
+    neigh = [dict(zip(cols, r)) for r in rows]
+    header = (f"query device {device_id} ({dtype}): {q_crit} critical of {q_n} readings")
+    lines = [header, "most behaviourally similar devices (same device_type):"]
+    lines += [f"  {r['device_id']}  critical={r['n_critical']} warning={r['n_warning']} "
+              f"score={r['_score']:.4f}" for r in neigh]
+    text = "\n".join(lines) if neigh else f"{header}\n(no other {dtype} devices found)"
+    return text, {"error": False, "query": {"device_id": device_id, "device_type": dtype,
+                  "n_critical": q_crit, "n_readings": q_n}, "rows": neigh}
+
+
 def generate(model, question, conn, embed_model, default_k, on_event=None):
     """Agentic answer: give Claude semantic_search + run_sql and let it route.
 
@@ -360,6 +436,9 @@ def generate(model, question, conn, embed_model, default_k, on_event=None):
                     conn, embed_model, block.input["query"], block.input.get("k", default_k))
             elif block.name == "run_sql":
                 text, meta = tool_run_sql(conn, block.input["statement"])
+            elif block.name == "similar_devices":
+                text, meta = tool_similar_devices(
+                    conn, block.input["device_id"], block.input.get("k", 8))
             else:
                 text, meta = f"ERROR: unknown tool {block.name}", {"error": True}
             if on_event:

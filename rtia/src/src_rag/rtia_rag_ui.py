@@ -77,20 +77,35 @@ def render_tool_event(kind, payload):
     the agentic loop executes. semantic_search calls also flag the cache hit/miss
     (that's the demo's point) and show the matched work orders.
     """
+    name = payload["name"]
     if kind == "tool_use":
-        if payload["name"] == "semantic_search":
+        if name == "semantic_search":
             st.markdown(f"🔎 **semantic_search** — query: “{payload['input'].get('query', '')}”")
+        elif name == "similar_devices":
+            inp = payload["input"]
+            st.markdown(f"🧭 **similar_devices** — device: `{inp.get('device_id', '')}` "
+                        f"(k={inp.get('k', 8)})")
         else:
             st.markdown("🗃️ **run_sql**")
             st.code(payload["input"].get("statement", ""), language="sql")
         return
 
     meta = payload["meta"]
-    if payload["name"] == "semantic_search":
+    if name == "semantic_search":
         st.caption("Cache **HIT** — reused the stored embedding." if meta.get("cache_hit")
                    else "Cache **MISS** — embedded with all-MiniLM-L6-v2 and stored it in knn_searches.")
         if meta.get("rows"):
             st.dataframe(meta["rows"], use_container_width=True)
+    elif name == "similar_devices":
+        if meta.get("error"):
+            st.warning("similar_devices: device not found in rtia.device_behavior.")
+        else:
+            q = meta.get("query", {})
+            st.caption(f"KNN over device_behavior, scoped to **{q.get('device_type')}**. "
+                       f"Query {q.get('device_id')}: {q.get('n_critical')} critical of "
+                       f"{q.get('n_readings')} readings.")
+            if meta.get("rows"):
+                st.dataframe(meta["rows"], use_container_width=True)
     else:  # run_sql
         if meta.get("error"):
             st.warning("run_sql rejected (read-only statements only).")
