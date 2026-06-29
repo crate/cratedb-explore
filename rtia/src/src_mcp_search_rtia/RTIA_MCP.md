@@ -442,13 +442,13 @@ Because the score is written to `rtia.fault_predictions`, the assistant can then
 read it back with `query_sql` alongside the rest of the fleet:
 
 ```sql
-SELECT device_id, device_type, plant_id, current_status,
-       fault_probability, fault_risk_label, scored_at
-FROM fault_predictions
-WHERE current_status IN ('warning', 'critical')
-  AND fault_probability > 0.60
-ORDER BY fault_probability DESC
-LIMIT 20;
+    SELECT device_id, device_type, plant_id, current_status,
+           fault_probability, fault_risk_label, scored_at
+    FROM  rtia.fault_predictions
+    WHERE current_status IN ('warning', 'critical')
+      AND fault_probability > 0.60
+    ORDER BY fault_probability DESC
+    LIMIT 20;
 ```
 
 Or skip the SQL entirely and use `fleet_high_risk` to list the already-scored
