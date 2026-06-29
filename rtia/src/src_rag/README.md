@@ -38,7 +38,10 @@ streamlit run rtia_rag_ui.py
 
 Connection uses the PostgreSQL wire protocol on **5432** (`psycopg`), default
 schema `rtia`. Anthropic and CrateDB credentials come from env vars; the
-embedding model runs locally (no key).
+embedding model runs locally (no key). The password var is **`CRATEDB_PASSWORD`**
+(not `CRATEDB_PASS`) — a mismatch connects with an empty password and the query
+fails. Run `streamlit` from this directory so it picks up `.streamlit/config.toml`
+(it disables the source watcher to silence the transformers/torchvision import noise).
 
 ## Caveats
 
