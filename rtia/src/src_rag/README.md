@@ -22,15 +22,23 @@ Claude may use either or both, then answers grounded in the tool results
 
 ## Prerequisites and a minor warning
 
-In order to use this you need an Anthropic API Key, and to have exported it as ANTHROPIC_API_KEY in your 
-environment. 
+In order to use this you need an Anthropic API key, exported as `ANTHROPIC_API_KEY`
+in your environment. You also need `CRATEDB_HOST`, `CRATEDB_USER` and
+`CRATEDB_PASSWORD` set to real values.
 
-In the demo we use Anthropic's API to 'score' text strings, which are them compared to the embedding 
-column 'notes_embedding' in the table rtia.maintenance_log. Each time you do this it will cost *you* money. 
-For fairly obvious reasons we add the results of scoring attempts to the table "rtia"."knn_searches", so 
-repeated searches should avoid the API toll.
+There are two separate steps here, and only one of them costs money:
 
-You also need to have set CRATEDB_HOST, CRATEDB_USER and CRATEDB_PASSWORD to real values.
+- **Embedding the question is free and runs locally.** The all-MiniLM-L6-v2 model
+  (sentence-transformers) runs on your machine — no API key, no charge — to turn
+  the question into a 384-dim vector, which `KNN_MATCH` then compares against
+  `notes_embedding` in `rtia.maintenance_log`. The `rtia.knn_searches` cache stores
+  that local vector keyed by the query string, so a repeated question skips
+  **recomputing the embedding** (it does not affect the Anthropic bill).
+- **The Anthropic API is what costs you money.** Each question runs an agentic
+  `claude-opus-4-8` loop that reasons and calls the tools — and *that* is billed
+  per call. It is **not** cached by `knn_searches`, so every question you ask pays
+  for fresh Claude calls (uncheck "agentic" in the UI for a free, embedding-only
+  search).
 
 ## The query-embedding cache
 
