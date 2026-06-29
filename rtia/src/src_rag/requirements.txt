@@ -1,0 +1,4 @@
+psycopg[binary]
+sentence-transformers
+anthropic
+streamlit

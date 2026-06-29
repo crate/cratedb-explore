@@ -1,0 +1,7 @@
+[server]
+# all-MiniLM-L6-v2 is a text-only model, but Streamlit's source watcher tries to
+# walk every transformers submodule for hot-reload — including the image models
+# (yolos, zoedepth) that import torchvision, which isn't installed. That floods
+# the log with "Examining the path of ... raised: ModuleNotFoundError: torchvision".
+# Disabling the watcher silences it; the only cost is no auto-reload on save.
+fileWatcherType = "none"
