@@ -19,24 +19,26 @@
 # software solely pursuant to the terms of the relevant commercial agreement.
 
 """
-rtia RAG — Streamlit UI
-=======================
-A small web front-end over rtia_rag.py. You type a maintenance question; the app
+rtia RAG — Streamlit UI (agentic)
+=================================
+A small web front-end over rtia_rag.py. You type a maintenance question; Claude
+picks between two tools per question and the app renders the trace:
 
-  1. checks it against `search_string` in rtia.knn_searches (a normalized,
-     exact-match PRIMARY KEY lookup),
-  2. reuses the cached 384-dim embedding on a hit, or generates one with
-     all-MiniLM-L6-v2 and stores it back on a miss,
-  3. KNN_MATCHes that vector against maintenance_log.notes_embedding, and
-  4. optionally asks Claude for a grounded answer over the matched work orders.
+  - semantic_search → embed the question (cached in rtia.knn_searches: normalized
+    exact-match PRIMARY KEY lookup, reuse on hit / embed + store on miss),
+    KNN_MATCH maintenance_log.notes_embedding, return the top-k work orders.
+  - run_sql → a read-only SELECT over the rtia schema, for exact sets / counts /
+    aggregates that a KNN top-k sample can't give.
 
-The cache hit/miss is surfaced in the UI — that's the part this demo exists to
-show. All the real logic lives in rtia_rag.py; this file is just the chrome.
+The cache hit/miss and each tool call are surfaced in the UI — that's the part
+this demo exists to show. All the real logic lives in rtia_rag.py; this file is
+just the chrome. Unchecking "agentic" falls back to a single semantic_search
+(no Claude, no key needed) so you can still inspect retrieval + the cache.
 
 Run:
     pip install -r requirements.txt
     export CRATEDB_HOST=... CRATEDB_USER=... CRATEDB_PASSWORD=... ANTHROPIC_API_KEY=...
-
+    streamlit run rtia_rag_ui.py
 
 Connection + Anthropic creds come from the same env vars as rtia_rag.py.
 """
@@ -68,9 +70,39 @@ def cache_size(conn):
         return cur.fetchone()[0]
 
 
+def render_tool_event(kind, payload):
+    """on_event callback for rag.generate — render each tool call/result inline.
+
+    Streamlit runs top-to-bottom, so writing here surfaces the trace in order as
+    the agentic loop executes. semantic_search calls also flag the cache hit/miss
+    (that's the demo's point) and show the matched work orders.
+    """
+    if kind == "tool_use":
+        if payload["name"] == "semantic_search":
+            st.markdown(f"🔎 **semantic_search** — query: “{payload['input'].get('query', '')}”")
+        else:
+            st.markdown("🗃️ **run_sql**")
+            st.code(payload["input"].get("statement", ""), language="sql")
+        return
+
+    meta = payload["meta"]
+    if payload["name"] == "semantic_search":
+        st.caption("Cache **HIT** — reused the stored embedding." if meta.get("cache_hit")
+                   else "Cache **MISS** — embedded with all-MiniLM-L6-v2 and stored it in knn_searches.")
+        if meta.get("rows"):
+            st.dataframe(meta["rows"], use_container_width=True)
+    else:  # run_sql
+        if meta.get("error"):
+            st.warning("run_sql rejected (read-only statements only).")
+        elif meta.get("rows"):
+            st.dataframe([dict(zip(meta["cols"], r)) for r in meta["rows"]], use_container_width=True)
+        else:
+            st.caption("run_sql returned no rows.")
+
+
 st.set_page_config(page_title="rtia maintenance RAG", layout="wide")
 st.title("rtia maintenance-log search")
-st.caption("Embed the question (cached in rtia.knn_searches) → KNN-match maintenance notes → ask Claude.")
+st.caption("Claude picks per question: semantic_search (KNN over notes, cached in rtia.knn_searches) or run_sql (read-only SQL).")
 
 with st.sidebar:
     st.header("Connection")
@@ -86,49 +118,48 @@ with st.sidebar:
 
     st.header("Options")
     top_k = st.slider("Results (k)", 1, 20, 5)
-    do_generate = st.checkbox("Generate grounded answer (calls Claude)", value=True)
+    agentic = st.checkbox("Agentic (let Claude pick tools — calls Claude)", value=True)
 
 question = st.text_input(
     "Ask about maintenance history",
-    placeholder="e.g. thermal runaway on temperature sensors",
+    placeholder="e.g. which technicians worked on sensor problems?",
 )
 
 if st.button("Search", type="primary") and question.strip():
     if not host:
         st.error("Set a CrateDB host (sidebar or CRATEDB_HOST).")
         st.stop()
-    if do_generate and not os.getenv("ANTHROPIC_API_KEY"):
-        st.error("ANTHROPIC_API_KEY is not set — either set it or uncheck 'Generate grounded answer'.")
+    if agentic and not os.getenv("ANTHROPIC_API_KEY"):
+        st.error("ANTHROPIC_API_KEY is not set — either set it or uncheck 'Agentic'.")
         st.stop()
 
     model = load_model(os.getenv("RTIA_EMBED_MODEL", rag.EMBED_MODEL))
     conn = get_conn(host, port, user, password, database)
 
-    # 1–2. cache lookup / generate-and-store
-    key = rag.normalize_key(question)
-    vec, hit = rag.get_query_embedding(conn, model, question)
-    if hit:
-        st.success(f"Cache **HIT** — reused the stored embedding for “{key}”.")
-    else:
-        st.info(f"Cache **MISS** — embedded “{key}” with all-MiniLM-L6-v2 and stored it in knn_searches.")
-    st.caption(f"knn_searches holds {cache_size(conn)} cached query embeddings.")
-
-    # 3. retrieve
-    rows = rag.retrieve(conn, vec, top_k)
-    if not rows:
-        st.warning("No matches — is maintenance_log.notes_embedding populated?")
-        st.stop()
-
-    st.subheader(f"Top {len(rows)} matching work orders")
-    st.dataframe(rows, use_container_width=True)
-
-    # 4. generate
-    if do_generate:
+    if agentic:
+        # Let Claude route between semantic_search and run_sql; render the trace
+        # via the on_event callback as the loop runs, then the grounded answer.
+        st.subheader("Retrieval & query trace")
         with st.spinner("Asking Claude…"):
             answer = rag.generate(
                 os.getenv("ANTHROPIC_MODEL", rag.DEFAULTS["chat_model"]),
                 question,
-                rag.build_context(rows),
+                conn,
+                model,
+                top_k,
+                on_event=render_tool_event,
             )
+        st.caption(f"knn_searches holds {cache_size(conn)} cached query embeddings.")
         st.subheader("Grounded answer")
         st.markdown(answer)
+    else:
+        # Retrieval-only: a single semantic_search, no Claude (no key needed).
+        text, meta = rag.tool_semantic_search(conn, model, question, top_k)
+        st.success("Cache **HIT** — reused the stored embedding." if meta["cache_hit"]
+                   else "Cache **MISS** — embedded and stored it in knn_searches.")
+        st.caption(f"knn_searches holds {cache_size(conn)} cached query embeddings.")
+        if not meta["rows"]:
+            st.warning("No matches — is maintenance_log.notes_embedding populated?")
+            st.stop()
+        st.subheader(f"Top {len(meta['rows'])} matching work orders")
+        st.dataframe(meta["rows"], use_container_width=True)

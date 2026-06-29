@@ -1,13 +1,24 @@
-# src_rag — RAG over the rtia maintenance log
+# src_rag — agentic RAG over the rtia schema
 
-Retrieval-Augmented Generation over `rtia.maintenance_log`: embed a question,
-KNN-match it against the free-text maintenance `notes`, and let Claude answer
-over the matched work orders. Two entry points share one module:
+Retrieval-Augmented Generation over the `rtia` schema where **Claude chooses how
+to retrieve**. It gets two tools and routes per question — fusing this repo's two
+patterns (the src_rag KNN path and the `src_mcp_search_rtia` `query_sql` path)
+into one agentic tool-use loop:
+
+- **`semantic_search`** — embed the question (all-MiniLM-L6-v2, 384-dim) and
+  `KNN_MATCH(notes_embedding, …)` the free-text maintenance `notes`. For "what
+  kind of failure / describe / find similar" questions.
+- **`run_sql`** — a read-only `SELECT` over the `rtia` schema. For "which / how
+  many / by technician / totals" questions that need an exact set or aggregate,
+  which a KNN top-k sample can't give.
+
+Claude may use either or both, then answers grounded in the tool results
+(`claude-opus-4-8`, adaptive thinking). Two entry points share one module:
 
 | File | What it is |
 | --- | --- |
-| `rtia_rag.py` | The pipeline + a CLI. Embed (all-MiniLM-L6-v2, 384-dim) → `KNN_MATCH(notes_embedding, …)` → `claude-opus-4-8` grounded answer. Also holds the query-embedding cache. |
-| `rtia_rag_ui.py` | A Streamlit front-end over `rtia_rag.py` that surfaces the cache hit/miss. |
+| `rtia_rag.py` | The pipeline + a CLI. Manual tool-use loop with the two tool handlers; `run_sql` executes over the same psycopg connection (read-only guard) and `semantic_search` reuses the query-embedding cache. |
+| `rtia_rag_ui.py` | A Streamlit front-end that renders the tool trace (cache hit/miss, matched work orders, SQL + rows) and the grounded answer. Unchecking "agentic" falls back to a single `semantic_search` (no Claude). |
 
 ## The query-embedding cache
 

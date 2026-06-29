@@ -19,24 +19,27 @@
 # software solely pursuant to the terms of the relevant commercial agreement.
 
 """
-rtia RAG demo
-=============
-A minimal Retrieval-Augmented Generation pipeline over `rtia.maintenance_log`,
-wiring the rtia tree's two retrieval halves into one flow:
+rtia RAG demo (agentic)
+=======================
+A Retrieval-Augmented Generation pipeline over the `rtia` schema that lets Claude
+choose how to retrieve, fusing this repo's two patterns — the src_rag KNN path and
+the src_mcp_search_rtia query_sql path — into one agentic tool-use loop:
 
-  Retrieve : embed the question with the SAME model that populated
-             notes_embedding (sentence-transformers/all-MiniLM-L6-v2, 384-dim),
-             KNN_MATCH against `maintenance_log.notes_embedding`, and pull the
-             descriptive columns + the free-text `notes` of the top-k work
-             orders.
-  Generate : hand those work orders to Claude as grounding context and ask it
-             to answer the question, citing the work orders / devices it used.
+  semantic_search : embed the question with the SAME model that populated
+                    notes_embedding (sentence-transformers/all-MiniLM-L6-v2,
+                    384-dim), KNN_MATCH against `maintenance_log.notes_embedding`,
+                    and return the descriptive columns + `notes` of the top-k work
+                    orders. For "what kind of failure / find similar" questions.
+  run_sql         : run a read-only SELECT over the rtia schema. For "which / how
+                    many / by technician / totals" questions that need an exact set
+                    or aggregate, which a KNN top-k sample cannot give.
 
-This is the live-embedding sibling of the rtia_mcp.py KNN path. rtia_mcp.py
-sidesteps live embedding by looking a query vector up in rtia.knn_searches by
-search_string (works only for canned queries); here we embed arbitrary
-questions locally so the demo handles free-form input. See knn_searches for the
-zero-dependency canned-query alternative.
+Claude routes per question (and may use both), then answers grounded in the tool
+results, citing the work orders / devices / aggregates it used. The query
+embedding is still cached in rtia.knn_searches via get_query_embedding, so
+semantic_search reuses stored vectors. rtia_mcp.py exposes the same query_sql
+shape to an external MCP client; here it lives inside the program alongside live
+KNN so a single CLI/UI handles free-form input end to end.
 
 Auth:
     CrateDB  : CRATEDB_USER / CRATEDB_PASSWORD (+ --host etc.).
@@ -64,13 +67,18 @@ import psycopg
 TABLE = "rtia.maintenance_log"
 
 # Descriptive columns we retrieve alongside the free-text `notes` to give the
-# model citable context for each work order.
+# model citable context for each work order. technician / cost_eur /
+# duration_hours are included so semantic retrieval can answer "who did the
+# work / how long / how much" without falling back to a SQL aggregation.
 CONTENT_COLUMNS = [
     "work_order_id",
     "device_id",
     "plant_id",
     "maintenance_type",
+    "technician",
     "completed_date",
+    "duration_hours",
+    "cost_eur",
     "status",
     "notes",
 ]
@@ -89,13 +97,77 @@ DEFAULTS = {
 }
 
 SYSTEM_PROMPT = (
-    "You answer questions about industrial maintenance using ONLY the work-order "
-    "rows provided in the user message. Each row is one maintenance work order. "
-    "If the context does not contain the answer, say so plainly rather than "
-    "guessing. Cite the work_order_id (and device_id) you drew on, in "
-    "parentheses, after the relevant claim. Report any sensor values with the "
-    "units given; never convert them."
+    "You answer questions about an industrial-IoT maintenance operation in the "
+    "CrateDB `rtia` schema. You have two tools and should choose per question:\n"
+    "  - semantic_search: embed the question and KNN-match the free-text "
+    "maintenance `notes`. Use it for 'what kind of failure / describe / find "
+    "similar issues' questions, where meaning matters more than exact filters.\n"
+    "  - run_sql: run a read-only SELECT over the `rtia` schema. Use it for "
+    "'which / how many / list all / totals / group by / by technician or plant' "
+    "questions — anything that needs an exact set, a count, or an aggregate, "
+    "which KNN's top-k sample cannot give. You may call both (e.g. semantic_search "
+    "to find the relevant failure mode, then run_sql to aggregate over it).\n\n"
+    "Key tables: maintenance_log (work_order_id, device_id, plant_id, "
+    "maintenance_type, technician, scheduled_date, completed_date, "
+    "duration_hours, cost_eur, status, full-text `notes`, notes_embedding); "
+    "devices (1 row per device: device_id, device_type, plant_id, line_id, ...); "
+    "plants; iot_data (Telegraf shape: tags['device_id'], tags['status'], "
+    "tags['metric_unit'], fields['metric_value'], fields['quality_score']); "
+    "fault_predictions (ML output, denormalised). Before querying columns you are "
+    "unsure of, check information_schema.columns for table_schema='rtia'.\n\n"
+    "rtia data rules: sensor values are NOT Kelvin — each iot_data reading's unit "
+    "is in tags['metric_unit'] (C, mm/s, bar, ...); report the value with its unit "
+    "and never convert. With no time range, scope iot_data to each device's latest "
+    "readings. Do NOT join fault_predictions to iot_data (it fans out ~1000x); "
+    "join the 1-row-per-device devices table instead. End SQL with LIMIT 1000 "
+    "unless asked otherwise.\n\n"
+    "Ground every answer in tool results. If the data does not contain the answer, "
+    "say so plainly rather than guessing. Cite the work_order_id / device_id (and "
+    "any SQL aggregate) you drew on, in parentheses after the relevant claim."
 )
+
+# Tool surface handed to Claude. The model picks per question; the handlers below
+# execute against the same CrateDB connection the CLI/UI already hold.
+TOOLS = [
+    {
+        "name": "semantic_search",
+        "description": (
+            "KNN-match the question against maintenance_log.notes_embedding and "
+            "return the top-k most semantically similar work orders (descriptive "
+            "columns + notes). Use for 'what kind of failure / describe / find "
+            "similar issues' questions. Returns a top-k SAMPLE, not an exhaustive "
+            "or counted set — use run_sql for those."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language description of the issue to match."},
+                "k": {"type": "integer", "description": "How many work orders to return (default 5)."},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "run_sql",
+        "description": (
+            "Run a single READ-ONLY SQL statement (SELECT / WITH / EXPLAIN / SHOW) "
+            "against the rtia schema and return columns + rows. Use for 'which / "
+            "how many / list all / totals / group by' questions that need an exact "
+            "set, count, or aggregate. Non-read statements are rejected."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "statement": {"type": "string", "description": "A read-only SQL statement over the rtia schema."},
+            },
+            "required": ["statement"],
+        },
+    },
+]
+
+# Statements run_sql will execute — keep the model's SQL read-only since the
+# connection is autocommit (unlike rtia_mcp.py, which relies on instructions).
+_READ_ONLY_PREFIXES = ("select", "with", "explain", "show")
 
 
 def parse_args():
@@ -208,30 +280,99 @@ def build_context(rows):
     return "\n\n".join(blocks)
 
 
-def generate(model, question, context):
-    """Ask Claude to answer the question grounded in the retrieved work orders."""
+def tool_semantic_search(conn, embed_model, query, k):
+    """semantic_search handler: cache-aware embed → KNN retrieve → context block.
+
+    Returns (text_for_model, meta) where meta carries the cache hit flag and the
+    retrieved rows so a UI can render the trace. Reuses get_query_embedding so the
+    rtia.knn_searches cache (and its hit/miss) still applies.
+    """
+    vec, hit = get_query_embedding(conn, embed_model, query)
+    rows = retrieve(conn, vec, k)
+    print(f"[tool] semantic_search(k={k}) cache {'HIT' if hit else 'MISS'} — "
+          f"{len(rows)} rows: {', '.join(r['work_order_id'] for r in rows) or '(none)'}",
+          file=sys.stderr)
+    text = build_context(rows) if rows else "(no matching work orders)"
+    return text, {"cache_hit": hit, "rows": rows, "k": k}
+
+
+def tool_run_sql(conn, statement):
+    """run_sql handler: execute a read-only SELECT and return columns + rows.
+
+    Rejects anything that isn't SELECT/WITH/EXPLAIN/SHOW because the connection is
+    autocommit — we don't want the model mutating the demo data.
+    """
+    if statement.lstrip().split(None, 1)[0].lower() not in _READ_ONLY_PREFIXES:
+        return "ERROR: only read-only statements (SELECT/WITH/EXPLAIN/SHOW) are allowed.", {"error": True}
+    with conn.cursor() as cur:
+        cur.execute(statement)
+        cols = [d[0] for d in cur.description] if cur.description else []
+        rows = cur.fetchall()
+    print(f"[tool] run_sql → {len(rows)} rows :: {' '.join(statement.split())[:120]}", file=sys.stderr)
+    lines = [f"columns: {cols}", f"row count: {len(rows)}"]
+    lines += [f"  {list(r)}" for r in rows[:50]]
+    if len(rows) > 50:
+        lines.append(f"  ... {len(rows) - 50} more rows omitted")
+    text = "\n".join(lines)
+    return text, {"error": False, "cols": cols, "rows": rows, "statement": statement}
+
+
+def generate(model, question, conn, embed_model, default_k, on_event=None):
+    """Agentic answer: give Claude semantic_search + run_sql and let it route.
+
+    Manual tool-use loop (Anthropic Python SDK): call the model, execute any
+    tool_use blocks, feed the results back, and repeat until it stops calling
+    tools. Adaptive thinking is on because the routing/synthesis is genuinely
+    multi-step; appending the full response.content each turn preserves the
+    thinking and tool_use blocks the API needs on the next request.
+
+    on_event(kind, payload) — optional callback so a UI can render the trace
+    ("tool_use" with name/input, "tool_result" with the handler meta).
+    """
     import anthropic  # imported lazily so retrieval-only use needs no SDK
 
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the env
-    user_message = (
-        f"Maintenance work orders:\n\n{context}\n\n"
-        f"---\nQuestion: {question}\n\n"
-        "Answer using only the work orders above, citing the work_order_id "
-        "(and device_id) you used."
-    )
-    # A single grounded Q&A call. max_tokens is modest because answers are a few
-    # short paragraphs; raise it (and switch to client.messages.stream) if you
-    # expand the context or want long write-ups. Add thinking={"type":"adaptive"}
-    # for harder cross-work-order synthesis.
-    resp = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    if resp.stop_reason == "refusal":
-        return "[model declined to answer this request]"
-    return next((b.text for b in resp.content if b.type == "text"), "")
+    messages = [{"role": "user", "content": question}]
+
+    for _ in range(6):  # cap tool round-trips so a confused model can't loop forever
+        resp = client.messages.create(
+            model=model,
+            max_tokens=4096,
+            thinking={"type": "adaptive"},
+            system=SYSTEM_PROMPT,
+            tools=TOOLS,
+            messages=messages,
+        )
+        if resp.stop_reason == "refusal":
+            return "[model declined to answer this request]"
+        if resp.stop_reason != "tool_use":
+            return next((b.text for b in resp.content if b.type == "text"), "")
+
+        messages.append({"role": "assistant", "content": resp.content})
+        results = []
+        for block in resp.content:
+            if block.type != "tool_use":
+                continue
+            if on_event:
+                on_event("tool_use", {"name": block.name, "input": block.input})
+            if block.name == "semantic_search":
+                text, meta = tool_semantic_search(
+                    conn, embed_model, block.input["query"], block.input.get("k", default_k))
+            elif block.name == "run_sql":
+                text, meta = tool_run_sql(conn, block.input["statement"])
+            else:
+                text, meta = f"ERROR: unknown tool {block.name}", {"error": True}
+            if on_event:
+                on_event("tool_result", {"name": block.name, "meta": meta})
+            results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": text,
+                "is_error": bool(meta.get("error")),
+            })
+        messages.append({"role": "user", "content": results})
+
+    return "[stopped: reached the tool-call limit without a final answer]"
 
 
 def read_question():
@@ -257,19 +398,11 @@ def main():
 
     conn = connect(args)
     try:
-        print(f'[info] embedding + retrieving top {args.top_k} for: "{question}"', file=sys.stderr)
-        vec, hit = get_query_embedding(conn, embed_model, question)
-        print(f"[info] cache {'HIT' if hit else 'MISS — embedded + stored'}", file=sys.stderr)
-        rows = retrieve(conn, vec, args.top_k)
+        print(f'[info] answering agentically (semantic_search + run_sql): "{question}"', file=sys.stderr)
+        answer = generate(args.chat_model, question, conn, embed_model, args.top_k)
     finally:
         conn.close()
 
-    if not rows:
-        print("[info] no rows retrieved — is maintenance_log.notes_embedding populated?", file=sys.stderr)
-        return 1
-
-    print(f"[info] retrieved: {', '.join(r['work_order_id'] for r in rows)}", file=sys.stderr)
-    answer = generate(args.chat_model, question, build_context(rows))
     print(answer)
     return 0
 
