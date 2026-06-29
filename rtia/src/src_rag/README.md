@@ -26,7 +26,7 @@ In order to use this you need an Anthropic API key, exported as `ANTHROPIC_API_K
 in your environment. You also need `CRATEDB_HOST`, `CRATEDB_USER` and
 `CRATEDB_PASSWORD` set to real values.
 
-There are two separate steps here, and only one of them costs money:
+There are two separate steps here, and one of them costs money. *Your money*, to be precise:
 
 - **Embedding the question is free and runs locally.** The all-MiniLM-L6-v2 model
   (sentence-transformers) runs on your machine — no API key, no charge — to turn
@@ -34,7 +34,7 @@ There are two separate steps here, and only one of them costs money:
   `notes_embedding` in `rtia.maintenance_log`. The `rtia.knn_searches` cache stores
   that local vector keyed by the query string, so a repeated question skips
   **recomputing the embedding** (it does not affect the Anthropic bill).
-- **The Anthropic API is what costs you money.** Each question runs an agentic
+- **The Anthropic API is what costs *you* money.** Each question runs an agentic
   `claude-opus-4-8` loop that reasons and calls the tools — and *that* is billed
   per call. It is **not** cached by `knn_searches`, so every question you ask pays
   for fresh Claude calls (uncheck "agentic" in the UI for a free, embedding-only
