@@ -21,13 +21,15 @@
 """
 backfill — compute every device's behaviour vector and store it in CrateDB.
 
-Creates rtia.device_behavior (one row per device, so it never fans out when
-joined) and upserts each device's WITHIN-TYPE standardized feature vector plus
-the held-out fault counts. Vectors are standardized per device_type so that
-within-type KNN over the stored vectors is scale-fair — the same transform the
-validation harness proved discriminative. Because the standardized vector is
-stored for every device, similar-device search just reads a device's row and
-KNN_MATCHes it; no scaler is needed at query time.
+Upserts each device's WITHIN-TYPE standardized feature vector plus the held-out
+fault counts into rtia.device_behavior (one row per device, so it never fans out
+when joined). The table's DDL lives in rtia/sql/rtia_schema_create.sql; this
+script does not create it and fails with a clear message if it is missing.
+Vectors are standardized per device_type so within-type KNN over the stored
+vectors is scale-fair — the same transform the validation harness proved
+discriminative. Because the standardized vector is stored for every device,
+similar-device search just reads a device's row and KNN_MATCHes it; no scaler is
+needed at query time.
 
     python backfill.py        # uses CRATEDB_* env vars (HTTP 4200, schema rtia)
 """
@@ -40,30 +42,29 @@ import behavior_features as bf
 
 VECTOR_DIM = len(bf.FEATURE_NAMES)
 
-DDL = f"""
-CREATE TABLE IF NOT EXISTS rtia.device_behavior (
-    device_id       TEXT PRIMARY KEY,
-    device_type     TEXT,
-    window_start    TIMESTAMP WITH TIME ZONE,
-    window_end      TIMESTAMP WITH TIME ZONE,
-    n_readings      INTEGER,
-    n_critical      INTEGER,
-    n_warning       INTEGER,
-    behavior_vector FLOAT_VECTOR({VECTOR_DIM})  -- {', '.join(bf.FEATURE_NAMES)}, within-type z-scored
-)
-"""
+
+def table_exists():
+    _, rows = bf.run_sql(
+        "SELECT COUNT(*) FROM information_schema.tables "
+        "WHERE table_schema = 'rtia' AND table_name = 'device_behavior'")
+    return bool(rows) and rows[0][0] > 0
 
 
 def main():
+    # The table's canonical DDL lives in rtia/sql/rtia_schema_create.sql (like
+    # fault_predictions). We don't auto-create it — fail with a clear message so the
+    # schema stays defined in one place.
+    if not table_exists():
+        print("ERROR: rtia.device_behavior is missing. Create the schema first with "
+              "rtia/sql/rtia_schema_create.sql, then re-run this backfill.", file=sys.stderr)
+        return 1
+
     print("Loading iot_data and featurizing…")
     devices = bf.load_devices()
     ids, types, X = bf.build_matrix(devices)
     Z, _ = bf.standardize_within_type(X, types)
     print(f"  {len(ids)} devices, {VECTOR_DIM}-dim vectors, "
           f"{len(set(types))} types.")
-
-    print("Creating rtia.device_behavior (if absent)…")
-    bf.run_sql(DDL)
 
     print("Upserting behaviour vectors…")
     inserted = 0

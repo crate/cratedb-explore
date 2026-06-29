@@ -195,6 +195,31 @@ CREATE TABLE IF NOT EXISTS rtia.fault_predictions (
     PRIMARY KEY (device_id, scored_at)
 );
 
+-- ── 8. DEVICE_BEHAVIOR ────────────────────────────────────────────────────────
+-- One behaviour vector per device for the rtia/src/src_behavior_search similarity
+-- search (the similar_devices tool), the numeric counterpart to
+-- maintenance_log.notes_embedding. The vector is 9 value-derived summary stats over
+-- a device's iot_data window (mean, std, min, max, range, p05, p50, p95,
+-- trend_slope), z-scored WITHIN each device_type so within-type KNN is scale-fair;
+-- each device measures one metric (device_type <-> metric_unit is 1:1), so
+-- similarity is only meaningful within a device_type. device_type / n_critical /
+-- n_warning are denormalised on the row so a neighbour result carries its fault
+-- counts without a join; the status counts are a held-out label, never part of the
+-- vector. Populated by src_behavior_search/backfill.py, which fails with a clear
+-- message if this table is missing. FLOAT_VECTOR supports KNN_MATCH directly; no
+-- explicit vector index is needed.
+
+CREATE TABLE IF NOT EXISTS rtia.device_behavior (
+    device_id       TEXT PRIMARY KEY,
+    device_type     TEXT,                          -- temperature_sensor | vibration_sensor | power_meter | pressure_sensor | flow_meter
+    window_start    TIMESTAMP WITH TIME ZONE,
+    window_end      TIMESTAMP WITH TIME ZONE,
+    n_readings      INTEGER,
+    n_critical      INTEGER,                        -- held-out fault label, not a feature
+    n_warning       INTEGER,                        -- held-out fault label, not a feature
+    behavior_vector FLOAT_VECTOR(9)                 -- within-type z-scored summary stats
+);
+
 -- ──────────────────────────────────────────────────────────────────────────────
 -- Once this schema is loaded, import rtia/grafana/rtia.json (the "Real Time Industrial
 -- Analytics Dashboard") to visualise it: add a PostgreSQL datasource pointing at

@@ -30,7 +30,7 @@ p95, trend_slope`.
 | --- | --- |
 | `behavior_features.py` | Core: load `iot_data`, `featurize()` a series, build the fleet matrix, within-type z-score, and an in-memory KNN. Also the CrateDB HTTP `_sql` helpers. |
 | `validate.py`          | The go/no-go harness — run it first. Proves a signal exists before any plumbing: (a) faulting-vs-healthy feature separation per type, (b) clone-and-perturb self-match (a manufactured ground truth that holds even if the synthetic data has no real structure). |
-| `backfill.py`          | Creates `rtia.device_behavior` and upserts every device's within-type standardized vector + fault counts (1 row per device — never fans out). |
+| `backfill.py`          | Upserts every device's within-type standardized vector + fault counts into `rtia.device_behavior` (1 row per device — never fans out). The table's DDL lives in `rtia/sql/rtia_schema_create.sql`; backfill does not create it and fails with a clear message if it is missing. |
 | `similar.py`           | Standalone CLI: KNN_MATCH over `device_behavior` for a device's nearest behavioural neighbours, scoped to its type. |
 
 The `similar_devices` agent tool lives in `rtia/src/src_rag/rtia_rag.py` (handler
@@ -43,7 +43,8 @@ pip install -r requirements.txt   # numpy
 export CRATEDB_HOST=... CRATEDB_USER=... CRATEDB_PASSWORD=...
 
 python validate.py                # prove the signal first (go/no-go)
-python backfill.py                # build + populate rtia.device_behavior
+# rtia.device_behavior must exist — it's created by rtia/sql/rtia_schema_create.sql
+python backfill.py                # populate rtia.device_behavior
 python similar.py DEVICE_0180 --k 8
 ```
 
