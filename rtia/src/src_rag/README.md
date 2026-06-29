@@ -1,8 +1,8 @@
 # src_rag — agentic RAG over the rtia schema
 
 In this example we show Retrieval-Augmented Generation over the `rtia` schema where 
-**Claude chooses how and what to retrieve**. It gets two tools and routes per 
-question — fusing this repo's two  patterns (the src_rag KNN path and the `src_mcp_search_rtia` `query_sql` path)
+**Claude chooses how and what to retrieve**. It gets three tools and routes per 
+question — fusing this repo's patterns (the src_rag KNN path, the `src_mcp_search_rtia` `query_sql` path, and the `src_behavior_search` device-similarity KNN)
 into one agentic tool-use loop:
 
 - **`semantic_search`** — embed the question (all-MiniLM-L6-v2, 384-dim) and
@@ -11,14 +11,19 @@ into one agentic tool-use loop:
 - **`run_sql`** — a read-only `SELECT` over the `rtia` schema. For "which / how
   many / by technician / totals" questions that need an exact set or aggregate,
   which a KNN top-k sample can't give.
+- **`similar_devices`** — given a `device_id`, `KNN_MATCH` over `rtia.device_behavior`
+  for the devices whose recent sensor behaviour is most similar, scoped to the same
+  `device_type` (with each neighbour's plant/line and fault counts). For "which
+  devices behave like X / others with this profile" questions — the numeric
+  counterpart to `semantic_search`, built by the `src_behavior_search` module.
 
 Claude may use either or both, then answers grounded in the tool results
 (`claude-opus-4-8`, adaptive thinking). Two entry points share one module:
 
 | File | What it is |
 | --- | --- |
-| `rtia_rag.py` | The pipeline + a CLI. Manual tool-use loop with the two tool handlers; `run_sql` executes over the same psycopg connection (read-only guard) and `semantic_search` reuses the query-embedding cache. |
-| `rtia_rag_ui.py` | A Streamlit front-end that renders the tool trace (cache hit/miss, matched work orders, SQL + rows) and the grounded answer. Unchecking "agentic" falls back to a single `semantic_search` (no Claude). |
+| `rtia_rag.py` | The pipeline + a CLI. Manual tool-use loop with the three tool handlers; `run_sql` and `similar_devices` execute over the same psycopg connection (read-only guard / KNN over `device_behavior`) and `semantic_search` reuses the query-embedding cache. |
+| `rtia_rag_ui.py` | A Streamlit front-end that renders the tool trace (cache hit/miss, matched work orders, SQL + rows, similar-device neighbours) and the grounded answer. Unchecking "agentic" falls back to a single `semantic_search` (no Claude). |
 
 ## Prerequisites and a minor warning
 
@@ -73,6 +78,10 @@ embedding model runs locally (no key). The password var is **`CRATEDB_PASSWORD`*
 (not `CRATEDB_PASS`) — a mismatch connects with an empty password and the query
 fails. Run `streamlit` from this directory so it picks up `.streamlit/config.toml`
 (it disables the source watcher to silence the transformers/torchvision import noise).
+
+The `similar_devices` tool reads `rtia.device_behavior`, so build that table first
+with the `src_behavior_search` module's `backfill.py` (see its README); without it,
+the tool returns a "device not found" error while the other two tools still work.
 
 ## Caveats
 
