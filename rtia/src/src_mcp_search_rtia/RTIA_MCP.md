@@ -7,7 +7,7 @@ questions in plain English and let the assistant write the SQL.
 
 This guide builds an MCP server over the [industrial-IoT dataset](https://github.com/crate/cratedb-explore)
 (the `rtia` schema — 5 plants, 500 devices, half a million sensor readings) and
-wires it to the [predictive-maintenance service](../src_ml/ML_GUIDE.md) that
+wires it to the [predictive-maintenance service](../src_ml/README.md) that
 ships alongside it. In a few minutes you will have an assistant that answers
 questions such as "Which devices are at highest fault risk right now?" — and that
 can trigger live ML scoring against the same cluster.
@@ -229,7 +229,7 @@ A few details make this work against CrateDB:
   `SET search_path TO rtia`, so the assistant can use unqualified table names.
 - The four inference tools are thin HTTP clients for the FastAPI service. They
   return its JSON verbatim, so the assistant sees exactly the same payloads
-  documented in `ML_GUIDE.md`.
+  documented in `README.md`.
 - The `instructions` and tool descriptions carry the data rules — inspect the
   schema with `information_schema` first, units come from `tags['metric_unit']`
   (not Kelvin), default to each device's latest readings, don't fan out
@@ -323,7 +323,7 @@ asset context, and answers — reporting each value with its `tags['metric_unit'
 ## Step 5 — Wire in the inference service
 
 The four scoring tools proxy the `realtime_inference.py` FastAPI service. Start
-it in a separate window first (full walkthrough in `../src_ml/ML_GUIDE.md`):
+it in a separate window first (full walkthrough in `../src_ml/README.md`):
 
 ```bash
 cd ../src_ml
@@ -464,7 +464,7 @@ names for '404' errors, but then continuing.
 
 ## Next steps
 
-- Read the [ML guide](../src_ml/ML_GUIDE.md) for how the predictions are trained
+- Read the [ML guide](../src_ml/README.md) for how the predictions are trained
   and served.
 - Read the [CrateDB MCP documentation](https://cratedb.com/docs/guide/integrate/mcp/cratedb-mcp.html)
   for the full picture, including documentation retrieval.

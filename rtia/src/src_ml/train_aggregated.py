@@ -26,7 +26,7 @@ features there (what train_model.py does), this script pushes the heavy work
 into CrateDB: it asks the database for one pre-aggregated row per device per
 time window — metric mean/std, quality mean, fault rate — and trains a compact
 classifier on that. pandas only ever sees the small aggregated result, so it is
-far faster and uses a fraction of the RAM. This is "Scenario 2" in ML_GUIDE.md.
+far faster and uses a fraction of the RAM. This is "Scenario 2" in README.md.
 
 What it predicts
 ----------------

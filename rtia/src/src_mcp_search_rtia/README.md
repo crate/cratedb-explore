@@ -13,7 +13,7 @@ resolve under the `rtia` schema. It is built on the official MCP Python SDK
 
 It is a sibling of `sda/src/src_mcp_search_german_weather/` (same shape, different
 schema), with extra tools that proxy the `realtime_inference.py` FastAPI service
-described in [`../src_ml/ML_GUIDE.md`](../src_ml/ML_GUIDE.md).
+described in [`../src_ml/README.md`](../src_ml/README.md).
 
 ## Tools
 
@@ -79,7 +79,7 @@ sets all of this for you.
 
 The scoring tools (`score_device`, `score_batch`, `fleet_high_risk`,
 `inference_health`) proxy the FastAPI service from `src_ml/`. Start it in a
-separate window first — see `../src_ml/ML_GUIDE.md` for the full walkthrough:
+separate window first — see `../src_ml/README.md` for the full walkthrough:
 
 If you haven't already run the ML stuff you'll need to create a venv and load the 
 requirements and build the model first:

@@ -20,7 +20,7 @@
 
 """Minimal example: load the trained models and score one feature row.
 
-Mirrors the snippet in ML_GUIDE.md ("Using the models in your own code").
+Mirrors the snippet in README.md ("Using the models in your own code").
 Run from the rtia/src/src_ml/ directory after train_model.py has produced the .pkl files
 in model/.
 """
@@ -47,7 +47,7 @@ row = {
     'metric_value': 85.0, 'quality_score': 91.0, 'hour': 14, 'day_of_week': 2,
     'device_type_enc': device_type_enc, 'metric_delta': 1.2, 'quality_delta': -0.5,
     'fw_major': 2,
-    # Rolling-window features (abbreviated to "..." in ML_GUIDE.md). In real use
+    # Rolling-window features (abbreviated to "..." in README.md). In real use
     # these come from engineer_features(); here they're filled with plausible
     # values so this script runs standalone.
     'metric_mean_5': 84.0, 'metric_mean_10': 83.5, 'metric_mean_20': 83.0,

@@ -23,7 +23,7 @@
 The default scripts read the local NDJSON file; passing --cratedb-url makes them
 pull from CrateDB instead. This module centralises that path so the two scripts
 share one connection helper and one set of SQL queries (the same queries the
-"Using CrateDB as the data source" section of ML_GUIDE.md documents).
+"Using CrateDB as the data source" section of README.md documents).
 
 The readings live in rtia.iot_data in Telegraf line-protocol shape — strings in
 the `tags` object, numbers in `fields` — so every query reaches into them with
@@ -169,7 +169,7 @@ _INTERVAL_RE = re.compile(r'^\d+\s+(second|minute|hour|day|week)s?$', re.IGNOREC
 
 def load_aggregated_frame(engine, window='1 day', days=None):
     """Per-device, per-time-window feature aggregates computed in CrateDB
-    (Scenario 2 in ML_GUIDE.md).
+    (Scenario 2 in README.md).
 
     Returns one row per (device, window) with metric mean/std, quality mean,
     fault_rate, and had_fault — the heavy rolling work pushed into the database

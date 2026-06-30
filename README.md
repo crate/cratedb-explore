@@ -194,7 +194,7 @@ The maintenance-note vectors are 384-dimension `FLOAT_VECTOR` embeddings (senten
 
 ## Machine learning
 
-[`rtia/src/src_ml/`](rtia/src/src_ml/) trains two models from the same `rtia.iot_data` readings: an XGBoost **predictive-maintenance classifier** (will a device enter warning/critical within the next few readings?) and an Isolation Forest **anomaly detector**. `train_model.py` and `predict.py` work offline from the dataset file, while `realtime_inference.py` is a FastAPI service that fetches each device's recent history from CrateDB, scores it, and writes the prediction back — so results are queryable alongside the raw sensor data. The guide also shows how to swap the file read for SQL against `rtia.iot_data` (scheduled retraining, in-database feature aggregation, live scoring). See [`rtia/src/src_ml/ML_GUIDE.md`](rtia/src/src_ml/ML_GUIDE.md) for the full walkthrough.
+[`rtia/src/src_ml/`](rtia/src/src_ml/) trains two models from the same `rtia.iot_data` readings: an XGBoost **predictive-maintenance classifier** (will a device enter warning/critical within the next few readings?) and an Isolation Forest **anomaly detector**. `train_model.py` and `predict.py` work offline from the dataset file, while `realtime_inference.py` is a FastAPI service that fetches each device's recent history from CrateDB, scores it, and writes the prediction back — so results are queryable alongside the raw sensor data. The guide also shows how to swap the file read for SQL against `rtia.iot_data` (scheduled retraining, in-database feature aggregation, live scoring). See [`rtia/src/src_ml/README.md`](rtia/src/src_ml/README.md) for the full walkthrough.
 
 ## MCP Search (Claude + CrateDB)
 
