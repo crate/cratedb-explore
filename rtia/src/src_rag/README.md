@@ -60,10 +60,21 @@ The curated rows (`thermal_event`, `calibration_drift`, …) keep their
 
 ## Run
 
-```bash
-pip install -r requirements.txt
-export CRATEDB_HOST=... CRATEDB_USER=... CRATEDB_PASSWORD=... ANTHROPIC_API_KEY=...
+First time, create and activate a Python virtualenv (an isolated per-project set of
+packages), then install dependencies:
 
+```bash
+python3 -m venv .venv          # create the environment in ./.venv
+source .venv/bin/activate       # activate it — prompt shows (.venv); Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Copy the repo-root `env.example.sh` to `env.sh`, fill in your CrateDB host/credentials
+and `ANTHROPIC_API_KEY`, and `source env.sh` — it defines every variable this module
+reads (the `CRATEDB_*` set plus `ANTHROPIC_API_KEY`), so nothing sensitive goes on the
+command line. Then:
+
+```bash
 # CLI
 python rtia_rag.py --host "$CRATEDB_HOST"
 echo "thermal runaway on temperature sensors" | python rtia_rag.py --host "$CRATEDB_HOST"

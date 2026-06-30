@@ -45,11 +45,19 @@ Connects over the PostgreSQL wire protocol using [psycopg](https://www.psycopg.o
 
 ## Setup
 
+Create and activate a Python virtualenv (an isolated per-project package set), then
+install the dependencies:
+
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv          # create the environment in ./.venv
+source .venv/bin/activate       # activate it; Windows: .venv\Scripts\activate
 pip install psycopg openai
 ```
+
+For the CrateDB connection, copy the repo-root `env.example.sh` to `env.sh`, edit in
+your host and credentials, and `source env.sh` — it defines `CRATEDB_USER` /
+`CRATEDB_PASSWORD` (and the other `CRATEDB_*` vars) in one place, so they never go on
+the command line.
 
 ## Usage
 

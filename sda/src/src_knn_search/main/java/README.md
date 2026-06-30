@@ -76,6 +76,10 @@ echo "wine country" | mvn -q compile exec:java -Dexec.args="--host <host> --full
 
 ### All options
 
+The `CRATEDB_*` and `OPENAI_API_KEY` env vars below are all defined in the repo-root
+`env.example.sh` — copy it to `env.sh`, edit in your values, and `source env.sh` so you
+don't have to pass them as flags.
+
 | Flag | Env var | Default | Description |
 | ---- | ------- | ------- | ----------- |
 | `--host` | `CRATEDB_HOST` | *(required)* | CrateDB hostname |

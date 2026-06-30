@@ -67,7 +67,7 @@ mvn clean package
 
 ## Run
 
-The application takes four mandatory positional arguments and optional `TYPE:COUNT` pairs to define the query mix. Database credentials are read from the `CRATEDB_USER` and `CRATEDB_PASSWORD` environment variables so they never land in shell history or process listings.
+The application takes four mandatory positional arguments and optional `TYPE:COUNT` pairs to define the query mix. Database credentials are read from the `CRATEDB_USER` and `CRATEDB_PASSWORD` environment variables so they never land in shell history or process listings. The repo-root `env.example.sh` defines these (and the other `CRATEDB_*` vars) in one place — copy it to `env.sh`, edit in your host and credentials, and `source env.sh` before running.
 
 ```bash
 export CRATEDB_USER='admin'

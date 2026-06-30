@@ -55,11 +55,18 @@ Because the coordinates travel as ordinary numeric fields and `geo_location` is 
 # Telegraf (any recent version)
 # https://docs.influxdata.com/telegraf/latest/install/
 
-# Python dependency for the replay script (in a per-module venv)
+# Python dependency for the replay script (in a per-module venv:
+# `python -m venv .venv` makes an isolated environment in ./.venv, then activate it)
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+CrateDB credentials come from the environment — Telegraf substitutes
+`${CRATEDB_USER}` / `${CRATEDB_PASSWORD}` into `telegraf_demo.conf` at load time. Set
+them via the repo-root env script: copy `env.example.sh` to `env.sh`, edit in your
+host and credentials, and `source env.sh` (it defines every `CRATEDB_*` variable in
+one place) before starting Telegraf.
 
 ---
 

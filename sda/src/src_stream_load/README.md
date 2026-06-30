@@ -107,6 +107,12 @@ the read, route, serialize, and rate-limit loop is unchanged.
 
 ## Install and run
 
+Create and activate a Python virtualenv (an isolated per-project package set —
+`python -m venv .venv` makes one in `./.venv`), then install dependencies. For the
+CrateDB and Kafka connection vars, copy the repo-root `env.example.sh` to `env.sh`,
+edit it, and `source env.sh` (it defines `CRATEDB_USER` / `CRATEDB_PASSWORD` and the
+Kafka settings in one place).
+
 ```bash
 cd sda/src/src_stream_load
 python -m venv .venv && source .venv/bin/activate

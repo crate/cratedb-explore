@@ -25,8 +25,12 @@ wire protocol, port 5432).
 #    run CREATE TABLE rtia.iot_data from ../../sql/rtia_schema_create.sql
 
 # 1. install the replay script's dependency
+#    (python -m venv .venv creates an isolated environment in ./.venv, then activate it)
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+# 1b. CrateDB creds for Telegraf's ${CRATEDB_USER}/${CRATEDB_PASSWORD} substitution:
+#     copy the repo-root env.example.sh to env.sh, edit it, then `source env.sh`
 
 # 2. start Telegraf (install it first if needed — see the guide)
 telegraf --config telegraf_demo.conf

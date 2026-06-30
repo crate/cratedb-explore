@@ -38,10 +38,20 @@ The `similar_devices` agent tool lives in `rtia/src/src_rag/rtia_rag.py` (handle
 
 ## Run
 
-```bash
-pip install -r requirements.txt   # numpy
-export CRATEDB_HOST=... CRATEDB_USER=... CRATEDB_PASSWORD=...
+First time, create and activate a Python virtualenv (an isolated per-project set of
+packages), then install the one dependency (numpy):
 
+```bash
+python3 -m venv .venv          # create the environment in ./.venv
+source .venv/bin/activate       # activate it — your prompt shows (.venv); Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+For the CrateDB connection, copy the repo-root `env.example.sh` to `env.sh`, fill in
+your host and credentials, and `source env.sh` — it defines every `CRATEDB_*` variable
+this module reads, so nothing sensitive goes on the command line. Then:
+
+```bash
 python validate.py                # prove the signal first (go/no-go)
 # rtia.device_behavior must exist — it's created by rtia/sql/rtia_schema_create.sql
 python backfill.py                # populate rtia.device_behavior
