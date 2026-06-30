@@ -31,6 +31,12 @@ In order to use this you need an Anthropic API key, exported as `ANTHROPIC_API_K
 in your environment. You also need `CRATEDB_HOST`, `CRATEDB_USER` and
 `CRATEDB_PASSWORD` set to real values.
 
+The repo-root `env.example.sh` defaults `ANTHROPIC_API_KEY` to the placeholder
+`NO_API_KEY`, because only the agentic generation step needs a key. If you leave it
+as `NO_API_KEY` (or unset), the CLI and the UI's **Agentic** mode fail gracefully
+with a clear message rather than a 401 — and the UI's retrieval-only mode (uncheck
+"Agentic") still works with no key. Set a real key to enable the agentic loop.
+
 There are two separate steps here, and one of them costs money. *Your money*, to be precise:
 
 - **Embedding the question is free and runs locally.** The all-MiniLM-L6-v2 model
