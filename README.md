@@ -7,7 +7,7 @@ This repository holds **two self-contained demo scenarios**, each in its own pro
 | Scenario                                                                                      | Tree                    | Schema | What it is                                                                                                                                                  |
 |-----------------------------------------------------------------------------------------------| ----------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **[German Weather, aka 'Sensor Data Analytics', (SDA)](#scenario-1--german-weather-sda)**     | [`sda/`](sda/README.md)   | `demo` | Real-time IoT analytics over German weather data: load generators, a KNN search CLI, a Kafka stream-load pipeline, an MCP server, and a Grafana dashboard. |
-| **[Real Time Industrial Analytics (RTIA)](#scenario-2--real-time-industrial-analytics-rtia)** | [`rtia/`](rtia/README.md) | `rtia` | A SQL-and-dashboard walkthrough over a fictional fleet of German factories, plus Telegraf ingestion, a predictive-maintenance ML pipeline, and an MCP server. |
+| **[Real Time Industrial Analytics (RTIA)](#scenario-2--real-time-industrial-analytics-rtia)** | [`rtia/`](rtia/README.md) | `rtia` | A SQL-and-dashboard walkthrough over a fictional fleet of German factories, plus Telegraf ingestion, a predictive-maintenance ML pipeline, an agentic RAG assistant, and an MCP server. |
 
 The two scenarios are independent — pick whichever fits what you want to explore. Everything that is **shared** (environment variables, prerequisites) is documented in the top-level sections below; each scenario's own section is self-contained from there.
 
@@ -179,7 +179,7 @@ Unlike the weather scenario, RTIA's data load is **pure SQL** — the data is pu
 
 | File                                                         | Description                                                                                                                                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`rtia_schema_create.sql`](rtia/sql/rtia_schema_create.sql)       | Creates the `rtia` tables (`plants`, `devices`, `maintenance_log`, `iot_data`, `locations`, `knn_searches`) and loads them with `COPY FROM` against the public S3 dataset.      |
+| [`rtia_schema_create.sql`](rtia/sql/rtia_schema_create.sql)       | Creates the `rtia` tables (`plants`, `devices`, `maintenance_log`, `iot_data`, `locations`, `knn_searches`, plus the initially empty `fault_predictions` and `device_behavior`) and loads the core tables with `COPY FROM` against the public S3 dataset.      |
 | [`rtia_first_queries.sql`](rtia/sql/rtia_first_queries.sql)       | Introductory analytics — ingest check, status distribution, fault rate by device type, hourly fault trend, alert density per plant, maintenance cost, and an OEE approximation. |
 | [`rtia_advanced_queries.sql`](rtia/sql/rtia_advanced_queries.sql) | Advanced patterns — geo (`DISTANCE`/`WITHIN`), full-text `MATCH` on maintenance notes, vector `KNN_MATCH` semantic search, and a hybrid vector + full-text combined score.      |
 | [`rtia_schema_delete.sql`](rtia/sql/rtia_schema_delete.sql)       | `DROP TABLE` statements to tear the scenario down.                                                                                                                              |
@@ -199,6 +199,12 @@ The maintenance-note vectors are 384-dimension `FLOAT_VECTOR` embeddings (senten
 ## MCP Search (Claude + CrateDB)
 
 [`rtia/src/src_mcp_search_rtia/`](rtia/src/src_mcp_search_rtia/README.md) is the RTIA counterpart to the weather MCP server — the same `query_sql`-over-`_sql` shape, but with `Default-Schema: rtia` and the RTIA data rules baked into its instructions. It adds four tools (`inference_health`, `score_device`, `score_batch`, `fleet_high_risk`) that proxy the `src_ml` FastAPI service, so the connecting model can trigger live ML scoring as well as run SQL. A draft cratedb.com walkthrough lives in [`RTIA_MCP.md`](rtia/src/src_mcp_search_rtia/RTIA_MCP.md).
+
+## RAG (agentic retrieval over the maintenance log)
+
+[`rtia/src/src_rag/`](rtia/src/src_rag/README.md) turns the SQL + KNN patterns above into an **agentic** assistant: `claude-opus-4-8` routes per question between three tools — `semantic_search` (cached KNN over `maintenance_log.notes_embedding`), `run_sql` (read-only SQL for exact sets and aggregates), and `similar_devices` (device-behaviour KNN) — then answers grounded in what it retrieved, citing the work orders and devices it used. It ships as a CLI and a Streamlit UI that surfaces the cache hit/miss and the tool trace. The query embedding is cached in `rtia.knn_searches` (read-through/write-back) and the embedding model runs locally — only the agentic loop calls the Anthropic API.
+
+[`rtia/src/src_behavior_search/`](rtia/src/src_behavior_search/README.md) is the numeric counterpart to that notes search, and what backs `similar_devices`: it featurizes each device's `iot_data` window into a 9-stat behaviour vector (z-scored within `device_type`), stores one per device in `rtia.device_behavior` (`FLOAT_VECTOR(9)`), and `KNN_MATCH`es them to find devices behaving alike — scoped to the device's type, since each device measures a single metric. A `validate.py` harness proves the signal (faulting-vs-healthy separation + a clone-and-perturb self-match) before the table is built.
 
 ## Grafana Dashboard
 
