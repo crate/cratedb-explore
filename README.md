@@ -198,7 +198,7 @@ The maintenance-note vectors are 384-dimension `FLOAT_VECTOR` embeddings (senten
 
 ## MCP Search (Claude + CrateDB)
 
-[`rtia/src/src_mcp_search_rtia/`](rtia/src/src_mcp_search_rtia/README.md) is the RTIA counterpart to the weather MCP server — the same `query_sql`-over-`_sql` shape, but with `Default-Schema: rtia` and the RTIA data rules baked into its instructions. It adds four tools (`inference_health`, `score_device`, `score_batch`, `fleet_high_risk`) that proxy the `src_ml` FastAPI service, so the connecting model can trigger live ML scoring as well as run SQL. A draft cratedb.com walkthrough lives in [`RTIA_MCP.md`](rtia/src/src_mcp_search_rtia/RTIA_MCP.md).
+[`rtia/src/src_mcp_search_rtia/`](rtia/src/src_mcp_search_rtia/) is the RTIA counterpart to the weather MCP server — the same `query_sql`-over-`_sql` shape, but with `Default-Schema: rtia` and the RTIA data rules baked into its instructions. It adds four tools (`inference_health`, `score_device`, `score_batch`, `fleet_high_risk`) that proxy the `src_ml` FastAPI service, so the connecting model can trigger live ML scoring as well as run SQL. A draft cratedb.com walkthrough lives in [`RTIA_MCP.md`](rtia/src/src_mcp_search_rtia/RTIA_MCP.md).
 
 ## RAG (agentic retrieval over the maintenance log)
 

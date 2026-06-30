@@ -229,7 +229,7 @@ A few details make this work against CrateDB:
   `SET search_path TO rtia`, so the assistant can use unqualified table names.
 - The four inference tools are thin HTTP clients for the FastAPI service. They
   return its JSON verbatim, so the assistant sees exactly the same payloads
-  documented in `README.md`.
+  documented in `../src_ml/README.md`.
 - The `instructions` and tool descriptions carry the data rules — inspect the
   schema with `information_schema` first, units come from `tags['metric_unit']`
   (not Kelvin), default to each device's latest readings, don't fan out
@@ -257,6 +257,25 @@ export CRATEDB_PASSWORD=<password>
 export CRATEDB_SCHEME=http          # https only if your cluster terminates TLS
 ```
 
+The full set of overrides — flags win over the matching environment variables,
+which fall back to these defaults:
+
+| Flag | Env var | Default |
+|---|---|---|
+| `--cratedb-url` | `CRATEDB_CLUSTER_URL` | — (overrides the parts below) |
+| `--cratedb-host` | `CRATEDB_HOST` | `localhost` |
+| `--cratedb-port` | `CRATEDB_PORT` | `4200` |
+| `--cratedb-user` | `CRATEDB_USER` | `crate` |
+| `--cratedb-password` | `CRATEDB_PASSWORD` | `a_password` |
+| `--cratedb-scheme` | `CRATEDB_SCHEME` | `http` |
+| `--inference-url` | `INFERENCE_URL` | `http://localhost:8000` |
+
+Credentials are a single pair: even when you point the server at a cluster with
+`--cratedb-url` / `CRATEDB_CLUSTER_URL`, the user and password come from
+`CRATEDB_USER` / `CRATEDB_PASSWORD` unless you embed them in the URL — so you
+don't have to put credentials in the URL. The repo-level `env.example.sh` sets
+all of this for you.
+
 ### Smoke-test the script
 
 Run the script on its own first, so you register something that runs:
@@ -271,6 +290,29 @@ exits with a traceback, fix that first: the usual causes are a wrong path or a
 `python` that can't see the installed `mcp`/`httpx` packages.
 
 Press Ctrl-c to stop it before continuing.
+
+### Try it with the MCP Inspector (optional)
+
+Before wiring the server into an assistant, you can call its tools by hand with
+the web-based [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
+([docs](https://modelcontextprotocol.io/docs/tools/inspector)). The `mcp` dev CLI
+launches both together:
+
+```bash
+mcp dev rtia_mcp.py
+```
+
+> **Requires [Node.js](https://nodejs.org/).** The Inspector is a Node app, so
+> `mcp dev` shells out to `npx`; without it you'll see `npx not found`. Install
+> Node first (e.g. `brew install node`), or skip the Inspector and register the
+> server with a client (below) instead. Set your connection environment variables
+> first so it connects to your cluster.
+
+`mcp dev` prints a URL like `http://localhost:6274` and opens it in your browser.
+In the Inspector: click **Connect** (left panel), open the **Tools** tab, then
+**List Tools** — the tools don't auto-populate. Call `query_sql` with `SELECT 1`
+to confirm connectivity, then try a real query such as
+`SELECT device_id, device_type, plant_id FROM devices ORDER BY 1 LIMIT 5`.
 
 ### Register with your assistant
 
@@ -323,7 +365,20 @@ asset context, and answers — reporting each value with its `tags['metric_unit'
 ## Step 5 — Wire in the inference service
 
 The four scoring tools proxy the `realtime_inference.py` FastAPI service. Start
-it in a separate window first (full walkthrough in `../src_ml/README.md`):
+it in a separate window first (full walkthrough in `../src_ml/README.md`).
+
+If you haven't run the ML module yet, create its venv, install the requirements,
+and train the model once before starting the service:
+
+```bash
+cd ../src_ml
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python train_model.py
+```
+
+Then start the service:
 
 ```bash
 cd ../src_ml
