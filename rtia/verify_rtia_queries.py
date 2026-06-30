@@ -27,7 +27,7 @@ and report pass/fail per query. Connection comes from env (source env.sh first):
     CRATEDB_PORT   (default 4200)        CRATEDB_PASSWORD
     CRATEDB_SCHEME (default http)
 
-Usage:  python verify_rtia_queries.py
+Usage:  python rtia/verify_rtia_queries.py   (runs from any cwd)
 """
 import base64
 import json
@@ -43,7 +43,10 @@ USER = os.environ.get("CRATEDB_USER")
 PASSWORD = os.environ.get("CRATEDB_PASSWORD", "")
 URL = f"{SCHEME}://{HOST}:{PORT}/_sql"
 
-FILES = ["rtia/sql/rtia_first_queries.sql", "rtia/sql/rtia_advanced_queries.sql"]
+# Resolve the SQL files relative to this script (rtia/), so it runs from any cwd.
+SQL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sql")
+FILES = [os.path.join(SQL_DIR, "rtia_first_queries.sql"),
+         os.path.join(SQL_DIR, "rtia_advanced_queries.sql")]
 
 
 def split_statements(path):
