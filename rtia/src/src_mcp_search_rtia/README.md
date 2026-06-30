@@ -68,7 +68,7 @@ Create and activate a virtual environment first so these packages stay isolated
 from your system Python, then install the MCP Python SDK and an HTTP client:
 
 ```bash
-python -m venv .venv .           # If needed....  
+python -m venv .venv             # if needed
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install "mcp[cli]" httpx
 ```
@@ -525,4 +525,3 @@ names for '404' errors, but then continuing.
   for the full picture, including documentation retrieval.
 - Explore [`cratedb-mcp`](https://github.com/crate/cratedb-mcp), the
   ready-to-run MCP server from Crate.io, for production use.
-```
