@@ -97,7 +97,7 @@ The `sda/data/` directory contains the reference datasets:
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | [`geo_points.json`](sda/data/geo_points.json)                                               | 726 weather station locations with nearest-town mappings           |
 | [`german_regions.json`](sda/data/german_regions.json)                                       | 16 German states with boundaries, fulltext columns, and embeddings |
-| [`export-demo_climate_data_large_v2.json`](sda/data/export-demo_climate_data_large_v2.json) | Climate measurement readings                                       |
+| `export-demo_climate_data_large_v2.json`                                                    | Climate measurement readings (S3-hosted, not committed — see `COPY FROM` below) |
 
 ### Loading the data with `COPY FROM`
 
