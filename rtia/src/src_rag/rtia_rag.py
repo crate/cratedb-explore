@@ -205,6 +205,17 @@ TOOLS = [
 # connection is autocommit (unlike rtia_mcp.py, which relies on instructions).
 _READ_ONLY_PREFIXES = ("select", "with", "explain", "show")
 
+# env.example.sh defaults ANTHROPIC_API_KEY to this placeholder. Only the agentic
+# generation step needs a key, so treat the placeholder (and unset/empty) as "no key"
+# and fail gracefully rather than sending NO_API_KEY to the API and getting a 401.
+NO_API_KEY = "NO_API_KEY"
+
+
+def anthropic_key():
+    """Return a usable Anthropic API key, or None if unset, empty, or the placeholder."""
+    key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    return key if key and key != NO_API_KEY else None
+
 
 def parse_args():
     p = argparse.ArgumentParser(description="RAG over rtia.maintenance_log (KNN retrieve + Claude generate).")
@@ -230,8 +241,8 @@ def parse_args():
     missing = []
     if not args.host:
         missing.append("--host / CRATEDB_HOST")
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        missing.append("ANTHROPIC_API_KEY (env)")
+    if not anthropic_key():
+        missing.append("a real ANTHROPIC_API_KEY (env) — it is unset or still 'NO_API_KEY'")
     if missing:
         print("Error: missing required parameter(s): " + ", ".join(missing), file=sys.stderr)
         sys.exit(2)
@@ -413,9 +424,14 @@ def generate(model, question, conn, embed_model, default_k, on_event=None):
     on_event(kind, payload) — optional callback so a UI can render the trace
     ("tool_use" with name/input, "tool_result" with the handler meta).
     """
+    key = anthropic_key()
+    if not key:
+        return ("[no usable ANTHROPIC_API_KEY — it is unset or still 'NO_API_KEY'. "
+                "Set a real key to run the agentic loop, or use retrieval-only mode.]")
+
     import anthropic  # imported lazily so retrieval-only use needs no SDK
 
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the env
+    client = anthropic.Anthropic(api_key=key)
     messages = [{"role": "user", "content": question}]
 
     for _ in range(6):  # cap tool round-trips so a confused model can't loop forever

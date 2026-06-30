@@ -144,8 +144,8 @@ if st.button("Search", type="primary") and question.strip():
     if not host:
         st.error("Set a CrateDB host (sidebar or CRATEDB_HOST).")
         st.stop()
-    if agentic and not os.getenv("ANTHROPIC_API_KEY"):
-        st.error("ANTHROPIC_API_KEY is not set — either set it or uncheck 'Agentic'.")
+    if agentic and not rag.anthropic_key():
+        st.error("ANTHROPIC_API_KEY is unset or still 'NO_API_KEY' — set a real key, or uncheck 'Agentic'.")
         st.stop()
 
     model = load_model(os.getenv("RTIA_EMBED_MODEL", rag.EMBED_MODEL))

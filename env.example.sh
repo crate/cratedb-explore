@@ -28,9 +28,12 @@ export CRATEDB_FULLTEXT_COLUMNS="${CRATEDB_FULLTEXT_COLUMNS:-tourism_info,transp
 export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-REPLACE_ME}"
 export OPENAI_EMBED_MODEL="${OPENAI_EMBED_MODEL:-text-embedding-3-small}"
 
-# Agentic RAG (rtia/src/src_rag) — the Claude generation step. The local embedding
-# model needs no key; only the agentic loop calls the Anthropic API.
-export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-sk-ant-REPLACE_ME}"
+# Agentic RAG (rtia/src/src_rag) — needed ONLY for the Claude generation step (the
+# CLI, and the UI's "Agentic" mode). The local embedding model and the UI's
+# retrieval-only mode need no key. Set a real key to run the agentic loop; leave it as
+# NO_API_KEY to skip it — the code treats NO_API_KEY (or unset) as "no key" and fails
+# gracefully with a clear message instead of a 401.
+export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-NO_API_KEY}"
 
 # Kafka stream load (sda/src/src_stream_load).
 export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
