@@ -1,8 +1,8 @@
 {
   "__inputs": [
     {
-      "name": "DS_POSTGRES-19",
-      "label": "crate-weather",
+      "name": "DS_GRAFANA-POSTGRESQL-DATASOURCE",
+      "label": "grafana-postgresql-datasource",
       "description": "",
       "type": "datasource",
       "pluginId": "grafana-postgresql-datasource",
@@ -43,6 +43,12 @@
     },
     {
       "type": "panel",
+      "id": "text",
+      "name": "Text",
+      "version": ""
+    },
+    {
+      "type": "panel",
       "id": "timeseries",
       "name": "Time series",
       "version": ""
@@ -67,7 +73,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
   "links": [],
   "panels": [
     {
@@ -86,7 +91,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -172,7 +177,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -204,7 +209,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -259,7 +264,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -304,7 +309,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -348,8 +353,8 @@
         ]
       },
       "gridPos": {
-        "h": 5,
-        "w": 3,
+        "h": 3,
+        "w": 4,
         "x": 0,
         "y": 10
       },
@@ -362,6 +367,10 @@
       "targets": [
         {
           "dataset": "docs",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -383,10 +392,6 @@
               }
             ],
             "limit": 50
-          },
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
           }
         }
       ],
@@ -407,7 +412,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -469,9 +474,9 @@
         ]
       },
       "gridPos": {
-        "h": 5,
+        "h": 6,
         "w": 6,
-        "x": 3,
+        "x": 4,
         "y": 10
       },
       "id": 3,
@@ -496,7 +501,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -528,7 +533,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -617,9 +622,9 @@
         ]
       },
       "gridPos": {
-        "h": 5,
+        "h": 6,
         "w": 6,
-        "x": 9,
+        "x": 10,
         "y": 10
       },
       "id": 6,
@@ -644,7 +649,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -676,7 +681,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -726,9 +731,9 @@
         ]
       },
       "gridPos": {
-        "h": 5,
+        "h": 6,
         "w": 6,
-        "x": 15,
+        "x": 16,
         "y": 10
       },
       "id": 8,
@@ -753,7 +758,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -783,12 +788,33 @@
       "type": "gauge"
     },
     {
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 0,
+        "y": 13
+      },
+      "id": 23,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "![logo](https://cratedb.com/hs-fs/hubfs/logos/CrateDB-logo-white-text.png?width=400&height=118&name=CrateDB-logo-white-text.png \"CrateDB logo\")",
+        "mode": "markdown"
+      },
+      "pluginVersion": "12.3.0",
+      "transparent": true,
+      "type": "text"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 16
       },
       "id": 2,
       "panels": [],
@@ -798,7 +824,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -953,7 +979,7 @@
         "h": 13,
         "w": 8,
         "x": 0,
-        "y": 16
+        "y": 17
       },
       "id": 1,
       "options": {
@@ -1133,7 +1159,7 @@
           "dataset": "docs",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -1162,7 +1188,7 @@
           "dataset": "docs",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -1195,7 +1221,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1317,7 +1343,7 @@
         "h": 13,
         "w": 7,
         "x": 8,
-        "y": 16
+        "y": 17
       },
       "id": 5,
       "options": {
@@ -1458,7 +1484,7 @@
           "dataset": "docs",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -1490,7 +1516,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1703,7 +1729,7 @@
         "h": 13,
         "w": 7,
         "x": 15,
-        "y": 16
+        "y": 17
       },
       "id": 15,
       "options": {
@@ -1845,7 +1871,7 @@
           "dataset": "docs",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -1880,7 +1906,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 30
       },
       "id": 10,
       "panels": [],
@@ -1890,7 +1916,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1993,7 +2019,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 30
+        "y": 31
       },
       "id": 9,
       "options": {
@@ -2015,7 +2041,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -2047,7 +2073,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -2150,7 +2176,7 @@
         "h": 5,
         "w": 7,
         "x": 8,
-        "y": 30
+        "y": 31
       },
       "id": 12,
       "options": {
@@ -2172,7 +2198,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -2204,7 +2230,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -2307,7 +2333,7 @@
         "h": 5,
         "w": 7,
         "x": 15,
-        "y": 30
+        "y": 31
       },
       "id": 13,
       "options": {
@@ -2329,7 +2355,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -2364,7 +2390,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 36
       },
       "id": 16,
       "panels": [],
@@ -2374,7 +2400,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -2501,7 +2527,7 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 36
+        "y": 37
       },
       "id": 17,
       "options": {
@@ -2523,7 +2549,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -2555,7 +2581,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -2634,7 +2660,7 @@
         "h": 5,
         "w": 7,
         "x": 8,
-        "y": 36
+        "y": 37
       },
       "id": 18,
       "options": {
@@ -2656,7 +2682,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -2688,7 +2714,7 @@
     {
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES-19}"
+        "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -2815,7 +2841,7 @@
         "h": 5,
         "w": 7,
         "x": 15,
-        "y": 36
+        "y": 37
       },
       "id": 19,
       "options": {
@@ -2837,7 +2863,7 @@
           "dataset": "crate",
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "${DS_POSTGRES-19}"
+            "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
           },
           "editorMode": "code",
           "format": "table",
@@ -2869,7 +2895,12 @@
   ],
   "preload": false,
   "schemaVersion": 42,
-  "tags": [],
+  "tags": [
+    "CrateDB",
+    "Real Time",
+    "IIOT",
+    "Analytics"
+  ],
   "templating": {
     "list": [
       {
@@ -2912,13 +2943,10 @@
       },
       {
         "allowCustomValue": false,
-        "current": {
-          "text": "Thüringen",
-          "value": "Thüringen"
-        },
+        "current": {},
         "datasource": {
           "type": "grafana-postgresql-datasource",
-          "uid": "${DS_POSTGRES-19}"
+          "uid": "${DS_GRAFANA-POSTGRESQL-DATASOURCE}"
         },
         "definition": "SELECT region_name FROM demo.german_regions WHERE region_name != 'Bremen' ORDER BY region_name;",
         "description": "",
@@ -3014,6 +3042,7 @@
   "timezone": "browser",
   "title": "IOT Sensor Data",
   "uid": "adpvvjk",
-  "version": 219,
-  "weekStart": ""
+  "version": 5,
+  "weekStart": "",
+  "id": null
 }
