@@ -3,8 +3,8 @@
   "kind": "Dashboard",
   "metadata": {
     "name": "adf897wcc",
-    "generation": 12,
-    "creationTimestamp": "2026-06-17T13:15:54Z",
+    "generation": 3,
+    "creationTimestamp": "2026-06-30T14:01:48Z",
     "labels": {},
     "annotations": {}
   },
@@ -4179,6 +4179,43 @@
           }
         }
       },
+      "panel-48": {
+        "kind": "Panel",
+        "spec": {
+          "id": 48,
+          "title": "",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "13.0.1",
+            "spec": {
+              "options": {
+                "code": {
+                  "language": "plaintext",
+                  "showLineNumbers": false,
+                  "showMiniMap": false
+                },
+                "content": "![logo](https://cratedb.com/hs-fs/hubfs/logos/CrateDB-logo-white-text.png?width=400&height=118&name=CrateDB-logo-white-text.png \"CrateDB logo\")",
+                "mode": "markdown"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
       "panel-5": {
         "kind": "Panel",
         "spec": {
@@ -5011,6 +5048,15 @@
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-8"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "AutoGridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-48"
                         }
                       }
                     }
