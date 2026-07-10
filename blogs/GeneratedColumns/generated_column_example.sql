@@ -50,14 +50,7 @@ CREATE TABLE gencol.bag_loading_events (
 --
 INSERT INTO gencol.bag_loading_events
   (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_size_cm)
-VALUES (
-  'good_bag',
-  NOW(),
-  {lat = 51.4715, long = -0.4889},  -- inside LHR Terminal 5
-  50,
-  35,
-  18
-);
+VALUES ('good_bag', NOW(), {lat = 51.4715, long = -0.4889}, 50, 35, 18);  -- inside LHR Terminal 5
 
 --
 -- Insert a bag that exceeds the limit on every dimension: 'oversize'
@@ -65,14 +58,7 @@ VALUES (
 --
 INSERT INTO gencol.bag_loading_events
   (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_size_cm)
-VALUES (
-  'bad_bag',
-  NOW(),
-  {lat = 51.4726, long = -0.4884},
-  81,
-  45,
-  30
-);
+VALUES ('bad_bag', NOW(), {lat = 51.4726, long = -0.4884}, 81, 45, 30);
 
 --
 -- Insert a bag whose conveyer event is reported 10 minutes after the fact:
@@ -80,14 +66,7 @@ VALUES (
 --
 INSERT INTO gencol.bag_loading_events
   (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_size_cm)
-VALUES (
-  'late_bag',
-  NOW() - INTERVAL '10' MINUTE,
-  {lat = 51.4720, long = -0.4891},
-  52,
-  36,
-  19
-);
+VALUES ('late_bag', NOW() - INTERVAL '10' MINUTE, {lat = 51.4720, long = -0.4891}, 52, 36, 19);
 
 --
 -- Insert a bag scanned over by Terminal 2: 'in_t5' will be generated
@@ -95,14 +74,7 @@ VALUES (
 --
 INSERT INTO gencol.bag_loading_events
   (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_size_cm)
-VALUES (
-  'stray_bag',
-  NOW(),
-  {lat = 51.4700, long = -0.4520},
-  48,
-  33,
-  17
-);
+VALUES ('stray_bag', NOW(), {lat = 51.4700, long = -0.4520}, 48, 33, 17);
 
 --
 -- Make the freshly inserted rows visible to the query below.
