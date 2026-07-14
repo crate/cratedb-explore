@@ -261,10 +261,10 @@ class TableLoader:
 ```
 
 If you'd rather insert over the PostgreSQL protocol, the same `INSERT` works with
-`psycopg2`'s `executemany` / `execute_values` against port 5432 — see the
-[`src_weather` load generators](../src_weather/) for that connection style — but
-you lose the per-row rowcounts that make the skipped-duplicate accounting above
-possible.
+`psycopg` against port 5432 — the repo's one PG-wire insert is the embedding-cache
+upsert in [`src_rag`](../../../rtia/src/src_rag/rtia_rag.py) (`INSERT ... ON
+CONFLICT (search_string) DO UPDATE` into `rtia.knn_searches`) — but you lose the
+per-row rowcounts that make the skipped-duplicate accounting above possible.
 
 This is the Kafka-fed counterpart to loading CrateDB straight from S3 with
 [`COPY FROM`](../../../README.md#loading-the-data-with-copy-from).
