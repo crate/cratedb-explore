@@ -189,6 +189,83 @@ Behaviour worth knowing:
   default `http://localhost:4200`). Exit codes: `0` success · `1` bad argument ·
   `2` CrateDB unreachable or rejected a statement.
 
+### The insert code
+
+CrateDB speaks the PostgreSQL wire protocol, and most modules in this repo insert
+that way (port 5432, via psycopg2 / JDBC / Npgsql). This consumer instead POSTs
+plain SQL to CrateDB's HTTP [`_sql` endpoint](https://cratedb.com/docs/crate/reference/en/latest/interfaces/http.html)
+(port 4200): its `bulk_args` form sends one parameterised `INSERT` with many rows
+of parameters in a single round trip, and the response reports a rowcount **per
+row** — which is how duplicate rows get counted as *skipped* rather than aborting
+the batch.
+
+The statement is an ordinary parameterised `INSERT` — note it deliberately omits
+the GENERATED `latitude`/`longitude` columns:
+
+```python
+_INSERT_STMT = (
+    "INSERT INTO demo.climate_data "
+    "(measurement_time, geo_location, data) VALUES (?, ?, ?)"
+)
+```
+
+`CrateClient` wraps the endpoint: one `POST` of `{"stmt": ..., "bulk_args": ...}`
+with HTTP basic auth and a `Default-Schema: demo` header:
+
+```python
+class CrateClient:
+    def __init__(self, url: str, auth: tuple | None = None):
+        self._url = url.rstrip("/") + "/_sql"
+        self._auth = auth
+        self._session = requests.Session()
+        self._session.headers["Default-Schema"] = "demo"
+
+    def execute(self, stmt: str, args=None, bulk_args=None) -> dict:
+        payload: dict = {"stmt": stmt}
+        if args is not None:
+            payload["args"] = args
+        if bulk_args is not None:
+            payload["bulk_args"] = bulk_args
+        resp = self._session.post(self._url, json=payload, auth=self._auth, timeout=120)
+        if resp.status_code >= 400:
+            raise CrateError(f"HTTP {resp.status_code}: {resp.text}")
+        return resp.json()
+```
+
+`TableLoader` buffers decoded records (whichever band they came from) and flushes
+a batch every `--batch-size` rows. Each entry in the response's `results` list is
+one row's outcome: rowcount `1` means inserted, anything else (notably `-2`, a
+primary-key conflict) is a duplicate and counts as skipped:
+
+```python
+class TableLoader:
+    def add(self, rec: dict) -> bool:
+        """Buffer one record. Returns True if a batch was flushed."""
+        self._rows.append(_to_row(rec))
+        self.received += 1
+        if len(self._rows) >= self._batch_size:
+            self.flush()
+            return True
+        return False
+
+    def flush(self) -> None:
+        if not self._rows:
+            return
+        res = self._crate.execute(_INSERT_STMT, bulk_args=self._rows)
+        for r in res.get("results", []):
+            if r.get("rowcount", -1) == _ROWCOUNT_INSERTED:
+                self.inserted += 1
+            else:
+                self.skipped += 1
+        self._rows = []
+```
+
+If you'd rather insert over the PostgreSQL protocol, the same `INSERT` works with
+`psycopg2`'s `executemany` / `execute_values` against port 5432 — see the
+[`src_weather` load generators](../src_weather/) for that connection style — but
+you lose the per-row rowcounts that make the skipped-duplicate accounting above
+possible.
+
 This is the Kafka-fed counterpart to loading CrateDB straight from S3 with
 [`COPY FROM`](../../../README.md#loading-the-data-with-copy-from).
 
