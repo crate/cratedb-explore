@@ -16,10 +16,10 @@ CREATE TABLE gencol.bag_loading_events (
   reported_location OBJECT(STRICT) AS(lat DOUBLE PRECISION,long DOUBLE PRECISION),
   bag_length_cm SMALLINT NOT NULL,
   bag_width_cm SMALLINT NOT NULL,
-  bag_size_cm SMALLINT NOT NULL,
+  bag_height_cm SMALLINT NOT NULL,
   oversize BOOLEAN GENERATED ALWAYS AS (
     CASE
-      WHEN bag_length_cm > 55 OR bag_width_cm > 40 OR bag_size_cm > 20 THEN true
+      WHEN bag_length_cm > 55 OR bag_width_cm > 40 OR bag_height_cm > 20 THEN true
       ELSE false
     END
   ),
@@ -49,7 +49,7 @@ CREATE TABLE gencol.bag_loading_events (
 -- will be generated as false.
 --
 INSERT INTO gencol.bag_loading_events
-  (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_size_cm)
+  (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_height_cm)
 VALUES ('good_bag', NOW(), {lat = 51.4715, long = -0.4889}, 50, 35, 18);  -- inside LHR Terminal 5
 
 --
@@ -57,7 +57,7 @@ VALUES ('good_bag', NOW(), {lat = 51.4715, long = -0.4889}, 50, 35, 18);  -- ins
 -- will be generated as true.
 --
 INSERT INTO gencol.bag_loading_events
-  (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_size_cm)
+  (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_height_cm)
 VALUES ('bad_bag', NOW(), {lat = 51.4726, long = -0.4884}, 81, 45, 30);
 
 --
@@ -65,7 +65,7 @@ VALUES ('bad_bag', NOW(), {lat = 51.4726, long = -0.4884}, 81, 45, 30);
 -- 'reported_late' will be generated as true.
 --
 INSERT INTO gencol.bag_loading_events
-  (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_size_cm)
+  (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_height_cm)
 VALUES ('late_bag', NOW() - INTERVAL '10' MINUTE, {lat = 51.4720, long = -0.4891}, 52, 36, 19);
 
 --
@@ -73,7 +73,7 @@ VALUES ('late_bag', NOW() - INTERVAL '10' MINUTE, {lat = 51.4720, long = -0.4891
 -- as false.
 --
 INSERT INTO gencol.bag_loading_events
-  (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_size_cm)
+  (bag_id, conveyer_timestamp, reported_location, bag_length_cm, bag_width_cm, bag_height_cm)
 VALUES ('stray_bag', NOW(), {lat = 51.4700, long = -0.4520}, 48, 33, 17);
 
 --
