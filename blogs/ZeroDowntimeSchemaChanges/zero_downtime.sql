@@ -1,12 +1,12 @@
 --
 -- Remove table if it already exists..
 --
-DROP TABLE IF EXISTS blog.my_network_devices ;
+DROP TABLE IF EXISTS my_usecase.my_network_devices ;
 
 --
 -- Create new table. Note that we don't specify what's in 'stuff_we_search' and
 -- stuff_we_dont_search
-CREATE TABLE blog.my_network_devices (
+CREATE TABLE my_usecase.my_network_devices (
   device_id TEXT NOT NULL,
   reading_timestamp TIMESTAMP NOT NULL,
   ip TEXT NOT NULL,
@@ -20,11 +20,11 @@ CREATE TABLE blog.my_network_devices (
 --
 -- See what our table looks like.
 --
-SHOW CREATE TABLE blog.my_network_devices;
+SHOW CREATE TABLE my_usecase.my_network_devices;
 
 --
 -- Insert a row.
-INSERT INTO blog.my_network_devices
+INSERT INTO my_usecase.my_network_devices
   (device_id, reading_timestamp, ip, mac, reported_location, stuff_we_search, stuff_we_dont_search)
 VALUES (
   '38U10M57C03110',
@@ -53,5 +53,5 @@ VALUES (
 --
 -- See what our table looks like now...
 --
-SHOW CREATE TABLE blog.my_network_devices;
+SHOW CREATE TABLE my_usecase.my_network_devices;
 
